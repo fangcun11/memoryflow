@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.expo/
+.export-test/
+apps/mobile/.expo/
