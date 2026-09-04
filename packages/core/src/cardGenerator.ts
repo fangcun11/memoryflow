@@ -3,7 +3,7 @@
 // ============================================================
 
 import { createId } from './id.ts'
-import type { KnowledgeBlock, Card, CardType } from './types.ts'
+import type { BlockAnnotation, KnowledgeBlock, Card, CardType } from './types.ts'
 
 // 政治理论常见关键词模式
 const DEFINITION_PATTERNS = [
@@ -157,6 +157,8 @@ export function generateCompareCard(
 
 /**
  * 批量生成卡片
+ * 优先按块内标注（annotations）定向出卡；无标注的块走规则兜底。
+ * choice/judge/recall 只在有对应标注时生成；types 参数仍是总开关。
  */
 export function generateCards(
   blocks: KnowledgeBlock[],
@@ -165,6 +167,32 @@ export function generateCards(
   const cards: Card[] = []
 
   for (const block of blocks) {
+    const annos = block.annotations ?? []
+
+    // 1. 有标注且类型被勾选 → 按标注出卡
+    if (annos.length > 0 && ['recall', 'cloze', 'choice', 'judge'].some(t => types.includes(t as CardType))) {
+      // recall/cloze 每块各一张（第一处标注）；choice/judge 每条标注各一张
+      let recallDone = false
+      let clozeDone = false
+
+      for (const anno of annos) {
+        if (anno.type === 'recall' && !recallDone && types.includes('recall')) {
+          cards.push(generateRecallCard(block, anno))
+          recallDone = true
+        } else if (anno.type === 'cloze' && !clozeDone && types.includes('cloze')) {
+          cards.push(generateAnnotatedClozeCard(block))
+          clozeDone = true
+        } else if (anno.type === 'choice' && types.includes('choice')) {
+          cards.push(generateChoiceCard(block, anno))
+        } else if (anno.type === 'judge' && types.includes('judge')) {
+          cards.push(generateJudgeCard(block, anno))
+        }
+      }
+      // 已标注的块不再走规则 QA/essay，避免重复
+      if (recallDone || clozeDone || annos.some(a => a.type === 'choice' || a.type === 'judge')) continue
+    }
+
+    // 2. 规则兜底
     for (const type of types) {
       switch (type) {
         case 'qa':
@@ -182,4 +210,65 @@ export function generateCards(
   }
 
   return cards
+}
+
+/**
+ * 记忆卡（名解）：由 **术语** 标注生成
+ */
+function generateRecallCard(block: KnowledgeBlock, anno: BlockAnnotation): Card {
+  const match = block.content.slice(anno.start, anno.end).match(/\*\*(.+?)\*\*/)
+  const term = (match ? match[1] : block.title || block.content.slice(0, 20)).trim()
+
+  return newCard(
+    block,
+    'recall',
+    term,
+    // 隐藏标注符号，给出术语所在句作为定义
+    block.content.replace(/\*\*(.+?)\*\*/g, '$1').trim()
+  )
+}
+
+/**
+ * 填空题：按 {{关键词}} / {{c1::关键词}} 标注挖空，而非规则关键词
+ * - 正面：原文挖空（词 → ____）
+ * - 背面：完整原文（词可见）
+ */
+function generateAnnotatedClozeCard(block: KnowledgeBlock): Card {
+  const hide = block.content.replace(
+    /\{\{\s*(?:c\d+\s*::)?(.+?)\s*\}\}/g,
+    '____'
+  )
+  const show = block.content.replace(
+    /\{\{\s*(?:c\d+\s*::)?(.+?)\s*\}\}/g,
+    '$1'
+  )
+  return newCard(block, 'cloze', `填空：${hide.trim()}`, show.trim())
+}
+
+/**
+ * 选择题：由 ?题干|正确项|干扰A|干扰B 标注生成
+ */
+function generateChoiceCard(block: KnowledgeBlock, anno: BlockAnnotation): Card {
+  const stem = anno.stem ?? block.content.slice(anno.start, anno.end).split('|')[0].trim()
+  const options = anno.options ?? []
+  return {
+    ...newCard(block, 'choice', `选择：${stem}`, `正确答案：${anno.answer ?? ''}`),
+    options,
+    answerIndex: 0, // 标注语法中第一项为正确项
+  }
+}
+
+/**
+ * 判断题：由 !陈述 / !~陈述 标注生成
+ */
+function generateJudgeCard(block: KnowledgeBlock, anno: BlockAnnotation): Card {
+  const stmt = block.content
+    .slice(anno.start, anno.end)
+    .replace(/^!\s*~?\s*/, '')
+    .trim()
+
+  return {
+    ...newCard(block, 'judge', `判断：${stmt}`, anno.judgeTrue ? '正确' : '错误'),
+    judgeAnswer: anno.judgeTrue,
+  }
 }

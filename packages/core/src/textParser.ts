@@ -3,7 +3,7 @@
 // ============================================================
 
 import { createId } from './id.ts'
-import type { Document, KnowledgeBlock } from './types.ts'
+import type { BlockAnnotation, Document, KnowledgeBlock } from './types.ts'
 
 /** 支持的预设标签 */
 export const PRESET_TAGS = [
@@ -49,8 +49,16 @@ export function parseTextToBlocks(
     const trimmed = para.trim()
     if (!trimmed) continue
 
-    // 检测标题行（#开头，或短行后跟长内容）
-    const isHeading = /^#{1,4}\s/.test(trimmed) || (trimmed.length < 20 && !trimmed.endsWith('。'))
+    // 标注行（!判断 / ?选择 / **名解** / {{填空}}）不参与标题检测，
+    // 否则会被短行规则误判为标题而拆散标注
+    const isAnnotationLine =
+      /^[!?]/.test(trimmed) || /^\*\*/.test(trimmed) || /^\{\{.*\}\}/.test(trimmed)
+
+    // 检测标题行（#开头，或短行后跟长内容）；标注行恒非标题
+    const isHeading =
+      isAnnotationLine
+        ? false
+        : /^#{1,4}\s/.test(trimmed) || (trimmed.length < 20 && !trimmed.endsWith('。'))
 
     if (isHeading && currentContent.length > minChunk) {
       // 保存当前块
@@ -113,7 +121,74 @@ function createBlock(
     relatedIds: [],
     createdAt: Date.now(),
     updatedAt: Date.now(),
+    annotations: scanAnnotations(content),
   }
+}
+
+// ============================================================
+// 标注语法解析
+//   **名词**        → recall 记忆卡（名解）
+//   {{关键词}}      → cloze 填空；{{c1::关键词}} 支持多空分组
+//   ?题干|正确|干扰 → choice 选择题（第一个 | 后为正确项）
+//   !陈述           → judge 判断（默认判断：陈述为真）
+//   !~陈述          → judge 判断（陈述为假，否定式）
+// ============================================================
+
+export function scanAnnotations(content: string): BlockAnnotation[] {
+  const annotations: BlockAnnotation[] = []
+
+  // **名解** —— 术语加粗
+  const recallRe = /\*\*(.+?)\*\*/g
+  let m: RegExpExecArray | null
+  while ((m = recallRe.exec(content)) !== null) {
+    annotations.push({
+      type: 'recall',
+      start: m.index,
+      end: m.index + m[0].length,
+    })
+  }
+
+  // {{c1::关键词}} 或 {{关键词}} —— 挖空
+  const clozeRe = /\{\{\s*(?:c(\d+)\s*::)?(.+?)\s*\}\}/g
+  while ((m = clozeRe.exec(content)) !== null) {
+    annotations.push({
+      type: 'cloze',
+      start: m.index,
+      end: m.index + m[0].length,
+      groupId: m[1] ? Number(m[1]) : undefined,
+    })
+  }
+
+  // ?题干|正确项|干扰A|干扰B —— 选择题（单行）
+  // 注意：首个 | 前是题干，之后才是选项（第一个选项为正确项）
+  const choiceRe = /^\?\s*(.+)$/gm
+  while ((m = choiceRe.exec(content)) !== null) {
+    const parts = m[1].split('|').map(s => s.trim()).filter(Boolean)
+    if (parts.length >= 3) {
+      const [stem, correct, ...distractors] = parts
+      annotations.push({
+        type: 'choice',
+        start: m.index,
+        end: m.index + m[0].length,
+        stem: stem.trim(),
+        answer: correct,
+        options: [correct, ...distractors],
+      })
+    }
+  }
+
+  // !陈述 / !~陈述 —— 判断题（单行）
+  const judgeRe = /^!(~?)\s*(.+)$/gm
+  while ((m = judgeRe.exec(content)) !== null) {
+    annotations.push({
+      type: 'judge',
+      start: m.index,
+      end: m.index + m[0].length,
+      judgeTrue: m[1] !== '~', // 默认陈述为真；!~ 表示该陈述是错的
+    })
+  }
+
+  return annotations
 }
 
 function extractTitle(content: string): string | undefined {

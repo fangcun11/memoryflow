@@ -14,7 +14,19 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useStore } from '../store'
 import { colors, spacing, radius } from '../theme'
-import { predictInterval, formatInterval, type ReviewRating } from '@memoryflow/core'
+import { predictInterval, formatInterval, type ReviewRating, type CardType } from '@memoryflow/core'
+
+function typeLabel(t: CardType): string {
+  switch (t) {
+    case 'qa': return '问答'
+    case 'cloze': return '填空'
+    case 'essay': return '论述'
+    case 'compare': return '对比'
+    case 'recall': return '名解'
+    case 'choice': return '选择'
+    case 'judge': return '判断'
+  }
+}
 
 const SCREEN_W = Dimensions.get('window').width
 const SWIPE_THRESHOLD = 90
@@ -196,7 +208,7 @@ export default function ReviewScreen({
           </Text>
           {flipped && (
             <Text style={{ fontSize: 12, color: colors.inkTertiary, marginTop: spacing.lg }}>
-              卡片类型：{card.type === 'qa' ? '问答' : card.type === 'cloze' ? '填空' : card.type === 'essay' ? '论述' : '对比'}
+              卡片类型：{typeLabel(card.type)}
             </Text>
           )}
         </View>

@@ -21,6 +21,7 @@ export interface KnowledgeBlock {
   relatedIds: string[]
   createdAt: number
   updatedAt: number
+  annotations?: BlockAnnotation[]
 }
 
 /** 标签 */
@@ -31,7 +32,19 @@ export interface Tag {
 }
 
 /** 卡片类型 */
-export type CardType = 'qa' | 'cloze' | 'compare' | 'essay'
+export type CardType = 'qa' | 'cloze' | 'compare' | 'essay' | 'recall' | 'choice' | 'judge'
+
+/** 知识块内标注（由标注语法解析而来：**名解** / {{填空}} / ?选择 / !判断） */
+export interface BlockAnnotation {
+  type: 'recall' | 'cloze' | 'choice' | 'judge'
+  start: number // 相对块 content 的偏移
+  end: number
+  groupId?: number // cloze 分组（{{c1::}} → 1）
+  stem?: string // choice 题干（| 前部分）
+  answer?: string // choice 的正确项（options 中第一个）
+  options?: string[] // choice 的全部选项（第一个为正确项）
+  judgeTrue?: boolean // judge 的答案：陈述为真
+}
 
 /** 卡片 */
 export interface Card {
@@ -47,6 +60,10 @@ export interface Card {
   dueDate: number
   lapses: number
   createdAt: number
+  // choice / judge 专用
+  options?: string[]
+  answerIndex?: number
+  judgeAnswer?: boolean
 }
 
 /** 复习评分 */
