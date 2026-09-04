@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Download, Upload, Trash2, X } from 'lucide-react'
 import { useStore } from '../../stores/useStore'
+import ConfirmDialog from '../../components/ConfirmDialog'
 
 export default function SettingsView() {
   const { settings, updateSettings, exportData, importData, clearAll } = useStore()
@@ -8,6 +9,7 @@ export default function SettingsView() {
   const [exportText, setExportText] = useState('')
   const [importText, setImportText] = useState('')
   const [showImport, setShowImport] = useState(false)
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
 
   const handleExport = () => {
     setExportText(exportData())
@@ -86,11 +88,7 @@ export default function SettingsView() {
             onClick={() => setShowImport(true)}
           />
           <button
-            onClick={() => {
-              if (confirm('确定要清空所有数据吗？此操作不可恢复！')) {
-                clearAll(); alert('已清空所有数据')
-              }
-            }}
+            onClick={() => setShowClearConfirm(true)}
             className="w-full flex items-center justify-between px-4 py-3 bg-error-light rounded-lg hover:bg-error/10 transition-colors"
           >
             <div className="text-left">
@@ -108,6 +106,21 @@ export default function SettingsView() {
         <p className="text-sm text-muted">政治理论记忆 v0.1 原型版 — 基于 SM-2 间隔重复算法的智能记忆引擎</p>
         <p className="text-xs text-muted-soft mt-2">数据存储在本地浏览器中，无需联网</p>
       </section>
+
+      {/* Clear Confirm */}
+      {showClearConfirm && (
+        <ConfirmDialog
+          title="清空所有数据？"
+          message="将删除所有文档、知识块、卡片和复习记录，此操作不可恢复。建议先导出备份。"
+          confirmText="清空"
+          danger
+          onConfirm={() => {
+            clearAll()
+            setShowClearConfirm(false)
+          }}
+          onClose={() => setShowClearConfirm(false)}
+        />
+      )}
 
       {/* Export Modal */}
       {showExport && (

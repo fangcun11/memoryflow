@@ -4,6 +4,7 @@ import { useStore } from '../../stores/useStore'
 import type { KnowledgeBlock } from '@memoryflow/core'
 import TagEditor from './TagEditor'
 import EditBlockModal from './EditBlockModal'
+import ConfirmDialog from '../../components/ConfirmDialog'
 
 interface Props {
   blocks: KnowledgeBlock[]
@@ -13,7 +14,10 @@ interface Props {
 
 export default function BlockList({ blocks, selectedIds, onToggleSelect }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const deleteBlock = useStore(s => s.deleteBlock)
   const editingBlock = blocks.find(b => b.id === editingId) ?? null
+  const deletingBlock = blocks.find(b => b.id === deletingId) ?? null
 
   return (
     <div className="space-y-3">
@@ -24,11 +28,26 @@ export default function BlockList({ blocks, selectedIds, onToggleSelect }: Props
           selected={selectedIds.includes(block.id)}
           onToggleSelect={() => onToggleSelect(block.id)}
           onEdit={() => setEditingId(block.id)}
+          onDelete={() => setDeletingId(block.id)}
         />
       ))}
 
       {editingBlock && (
         <EditBlockModal block={editingBlock} onClose={() => setEditingId(null)} />
+      )}
+
+      {deletingBlock && (
+        <ConfirmDialog
+          title="删除这个知识块？"
+          message={`「${deletingBlock.title || deletingBlock.content.slice(0, 30)}」及其生成的卡片将一并删除，不可恢复。`}
+          confirmText="删除"
+          danger
+          onConfirm={() => {
+            deleteBlock(deletingBlock.id)
+            setDeletingId(null)
+          }}
+          onClose={() => setDeletingId(null)}
+        />
       )}
     </div>
   )
@@ -39,16 +58,17 @@ function BlockCard({
   selected,
   onToggleSelect,
   onEdit,
+  onDelete,
 }: {
   block: KnowledgeBlock
   selected: boolean
   onToggleSelect: () => void
   onEdit: () => void
+  onDelete: () => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const [editingTags, setEditingTags] = useState(false)
   const tags = useStore(s => s.tags)
-  const deleteBlock = useStore(s => s.deleteBlock)
 
   return (
     <div
@@ -92,7 +112,7 @@ function BlockCard({
             <button
               onClick={e => {
                 e.stopPropagation()
-                if (confirm('确定删除此知识块？')) deleteBlock(block.id)
+                onDelete()
               }}
               className="w-9 h-9 lg:w-7 lg:h-7 rounded-lg hover:bg-error-light active:bg-error-light flex items-center justify-center text-muted-soft hover:text-error transition-colors"
               title="删除"

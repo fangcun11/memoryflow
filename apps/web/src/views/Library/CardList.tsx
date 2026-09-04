@@ -3,6 +3,7 @@ import { Trash2 } from 'lucide-react'
 import { useStore } from '../../stores/useStore'
 import { formatInterval } from '@memoryflow/core'
 import type { Card } from '@memoryflow/core'
+import ConfirmDialog from '../../components/ConfirmDialog'
 
 /** 卡片类型徽标（与 ReviewView TYPE_BADGE 同源配色） */
 const TYPE_BADGE: Record<string, { label: string; classes: string }> = {
@@ -37,6 +38,7 @@ export default function CardList({ cards }: Props) {
   const deleteCard = useStore(s => s.deleteCard)
   const titles = new Map(blocks.map(b => [b.id, b.title]))
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<Card | null>(null)
 
   if (cards.length === 0) {
     return (
@@ -94,7 +96,7 @@ export default function CardList({ cards }: Props) {
                   <button
                     onClick={e => {
                       e.stopPropagation()
-                      if (confirm('确定删除此卡片？该卡片的复习进度将一并移除。')) deleteCard(card.id)
+                      setPendingDelete(card)
                     }}
                     className="w-9 h-9 lg:w-7 lg:h-7 rounded-lg hover:bg-error-light active:bg-error-light flex items-center justify-center text-muted-soft hover:text-error transition-colors"
                     title="删除卡片"
@@ -134,6 +136,20 @@ export default function CardList({ cards }: Props) {
           </div>
         )
       })}
+
+      {pendingDelete && (
+        <ConfirmDialog
+          title="删除这张卡片？"
+          message={`「${pendingDelete.front.slice(0, 40)}${pendingDelete.front.length > 40 ? '…' : ''}」的复习进度将一并移除，不可恢复。`}
+          confirmText="删除"
+          danger
+          onConfirm={() => {
+            deleteCard(pendingDelete.id)
+            setPendingDelete(null)
+          }}
+          onClose={() => setPendingDelete(null)}
+        />
+      )}
     </div>
   )
 }

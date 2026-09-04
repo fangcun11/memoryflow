@@ -239,6 +239,13 @@ export function createMemoryFlowStore(
         deleteCard: cardId => {
           set(state => ({
             cards: state.cards.filter(c => c.id !== cardId),
+            // 清掉该卡的复习日志，避免看板统计残留孤儿数据
+            reviewLogs: state.reviewLogs.filter(l => l.cardId !== cardId),
+            // 若该卡还在当前复习队列中，同步剔除
+            reviewQueue:
+              state.currentReviewIndex < state.reviewQueue.length
+                ? state.reviewQueue.filter(c => c.id !== cardId)
+                : state.reviewQueue,
           }))
         },
 
