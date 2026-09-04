@@ -28,3 +28,6 @@ apps/mobile/.expo/
 apps/desktop/dist/
 apps/desktop/web-dist/
 apps/desktop/release/
+
+# 早期打包备份，不入库
+*.tar.gz
