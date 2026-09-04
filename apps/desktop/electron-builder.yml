@@ -1,0 +1,20 @@
+{
+  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/app-builder-lib/scheme.json",
+  "appId": "com.memoryflow.desktop",
+  "productName": "MemoryFlow",
+  "directories": {
+    "output": "release"
+  },
+  "files": [
+    "dist/**/*",
+    "../web/dist/**/*"
+  ],
+  "extraResources": [],
+  "win": {
+    "target": "nsis"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "@memoryflow/desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MemoryFlow Electron desktop app",
+  "main": "dist/main.js",
+  "scripts": {
+    "build:main": "node build-main.mjs",
+    "build:web": "npm run build --workspace @memoryflow/web",
+    "build": "npm run build:web && npm run build:main",
+    "start": "npm run build && electron .",
+    "dev": "node dev.mjs",
+    "package": "npm run build && electron-builder --dir"
+  },
+  "devDependencies": {
+    "electron": "^38.2.0",
+    "electron-builder": "^25.1.8",
+    "esbuild": "^0.25.0",
+    "typescript": "~6.0.2"
+  }
+}

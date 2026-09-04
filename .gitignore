@@ -25,3 +25,6 @@ dist-ssr
 .expo/
 .export-test/
 apps/mobile/.expo/
+apps/desktop/dist/
+apps/desktop/web-dist/
+apps/desktop/release/
