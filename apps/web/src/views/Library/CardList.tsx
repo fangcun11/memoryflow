@@ -4,6 +4,7 @@ import { useStore } from '../../stores/useStore'
 import { formatInterval } from '@memoryflow/core'
 import type { Card } from '@memoryflow/core'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import { toast } from '../../components/toast'
 
 /** 卡片类型徽标（与 ReviewView TYPE_BADGE 同源配色） */
 const TYPE_BADGE: Record<string, { label: string; classes: string }> = {
@@ -146,6 +147,7 @@ export default function CardList({ cards }: Props) {
           onConfirm={() => {
             deleteCard(pendingDelete.id)
             setPendingDelete(null)
+            toast('卡片已删除')
           }}
           onClose={() => setPendingDelete(null)}
         />

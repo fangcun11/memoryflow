@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import TabBar from './TabBar'
+import ToastHost from './ToastHost'
 
 /**
  * 双导航布局：
@@ -21,6 +22,7 @@ export default function Layout() {
         </main>
         <TabBar />
       </div>
+      <ToastHost />
     </div>
   )
 }

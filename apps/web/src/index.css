@@ -202,3 +202,18 @@ body {
 .sheet-up {
   animation: sheet-up 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+/* ========== Toast 入场（仅 transform + opacity，GPU 加速） ========== */
+@keyframes toast-in {
+  from {
+    transform: translateY(-8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+.toast-in {
+  animation: toast-in 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}

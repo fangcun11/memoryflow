@@ -5,6 +5,7 @@ import BlockList from './BlockList'
 import CardList from './CardList'
 import ImportModal from './ImportModal'
 import GeneratePanel from './GeneratePanel'
+import { toast } from '../../components/toast'
 
 /** 视图模式：知识块 / 卡片 */
 type ViewMode = 'blocks' | 'cards'
@@ -149,8 +150,13 @@ export default function LibraryView() {
         <GeneratePanel
           selectedCount={selectedBlockIds.length}
           onGenerate={types => {
-            useStore.getState().generateFromBlocks(selectedBlockIds, types)
+            const newCards = useStore.getState().generateFromBlocks(selectedBlockIds, types)
             setSelectedBlockIds([])
+            if (newCards.length > 0) {
+              toast(`已生成 ${newCards.length} 张卡片，可在「卡片」视图查看`)
+            } else {
+              toast('所选知识块没有可生成的内容，请检查标注或类型', 'error')
+            }
           }}
           onClear={() => setSelectedBlockIds([])}
         />

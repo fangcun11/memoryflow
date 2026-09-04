@@ -5,6 +5,7 @@ import type { KnowledgeBlock } from '@memoryflow/core'
 import TagEditor from './TagEditor'
 import EditBlockModal from './EditBlockModal'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import { toast } from '../../components/toast'
 
 interface Props {
   blocks: KnowledgeBlock[]
@@ -45,6 +46,7 @@ export default function BlockList({ blocks, selectedIds, onToggleSelect }: Props
           onConfirm={() => {
             deleteBlock(deletingBlock.id)
             setDeletingId(null)
+            toast('知识块及其卡片已删除')
           }}
           onClose={() => setDeletingId(null)}
         />

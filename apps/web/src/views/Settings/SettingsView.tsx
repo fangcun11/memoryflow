@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Download, Upload, Trash2, X } from 'lucide-react'
 import { useStore } from '../../stores/useStore'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import { toast } from '../../components/toast'
 
 export default function SettingsView() {
   const { settings, updateSettings, exportData, importData, clearAll } = useStore()
@@ -19,8 +20,11 @@ export default function SettingsView() {
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(exportText)
-      alert('已复制到剪贴板')
-    } catch { /* fallback */ }
+      toast('已复制到剪贴板')
+      setShowExport(false)
+    } catch {
+      toast('复制失败，请手动选择文本复制', 'error')
+    }
   }
 
   const handleImport = () => {
@@ -28,7 +32,7 @@ export default function SettingsView() {
     importData(importText)
     setImportText('')
     setShowImport(false)
-    alert('导入成功！')
+    toast('导入成功')
   }
 
   return (
@@ -117,6 +121,7 @@ export default function SettingsView() {
           onConfirm={() => {
             clearAll()
             setShowClearConfirm(false)
+            toast('已清空所有数据')
           }}
           onClose={() => setShowClearConfirm(false)}
         />
