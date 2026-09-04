@@ -1,10 +1,38 @@
 import { useState } from 'react'
-import { X, ClipboardPaste, Check } from 'lucide-react'
+import { X, ClipboardPaste, Check, ChevronDown } from 'lucide-react'
 import { useStore } from '../../stores/useStore'
 
 interface Props {
   onClose: () => void
 }
+
+/** 标注语法速查：与 EditBlockModal 工具条、core 解析规则一一对应 */
+const ANNOTATION_EXAMPLES = [
+  {
+    label: '名词解释',
+    syntax: '**关键词**',
+    desc: '翻面回忆该名词的含义',
+    example: '**唯物辩证法**是研究联系和发展的科学。',
+  },
+  {
+    label: '填空',
+    syntax: '{{关键词}}',
+    desc: '句子挖空，翻面看完整句',
+    example: '{{实践}}是检验真理的唯一标准。',
+  },
+  {
+    label: '选择题',
+    syntax: '?题干|正确项|干扰项',
+    desc: '独占一行，第一项为正确答案，复习时点选作答',
+    example: '?两次飞跃是|感性到理性、理性到实践|实践到认识|具体到抽象',
+  },
+  {
+    label: '判断题',
+    syntax: '!陈述 或 !~陈述',
+    desc: '! 为正确陈述，!~ 为错误陈述，复习时判断对错',
+    example: '!量变是质变的必要准备',
+  },
+]
 
 /**
  * 导入材料弹层
@@ -91,6 +119,31 @@ export default function ImportModal({ onClose }: Props) {
               <p className="text-xs text-muted-soft shrink-0">
                 提示：导入后会自动按段落切分为知识块，你可以在知识库中编辑和打标签。
               </p>
+              {/* 标注语法示例 — 原生 details/summary，无 JS 状态 */}
+              <details className="group shrink-0 border border-hairline rounded-lg bg-surface-card/60 overflow-hidden">
+                <summary className="flex items-center gap-1.5 px-4 py-2.5 text-xs text-body-strong cursor-pointer select-none hover:text-coral transition-colors list-none [&::-webkit-details-marker]:hidden">
+                  <ChevronDown
+                    className="w-3.5 h-3.5 text-muted-soft transition-transform duration-200 group-open:rotate-180"
+                    strokeWidth={2}
+                  />
+                  支持标注语法：导入前就写好，自动生成对应题型
+                </summary>
+                <div className="px-4 pb-3 pt-1 space-y-2.5 border-t border-hairline/60">
+                  {ANNOTATION_EXAMPLES.map(item => (
+                    <div key={item.label} className="text-xs leading-relaxed">
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        <span className="font-medium text-body-strong">{item.label}</span>
+                        <code className="px-1.5 py-0.5 rounded bg-surface-soft text-[11px] text-coral font-mono">
+                          {item.syntax}
+                        </code>
+                      </div>
+                      <p className="text-muted-soft mt-0.5">
+                        {item.desc}，例：<span className="text-muted">{item.example}</span>
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </details>
             </div>
           )}
 
