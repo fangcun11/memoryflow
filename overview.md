@@ -64,3 +64,22 @@ cd apps/mobile && npx expo start     # Expo Go 扫码，或按 i/a 启动模拟�
 - 真机测试手势与 AsyncStorage 持久化
 - 双端数据互通（JSON 导出/导入已内置于 core，云同步建议 V2）
 - 微信小程序路线（Taro）可复用 packages/core，需注入 wx.storage 适配器 + setIdGenerator
+
+---
+
+# 追加：Electron 桌面端（apps/desktop）
+
+## 架构
+- 复用 web 构建（vite base './' + HashRouter 已兼容 file://），build-main.mjs 一并拷贝 web-dist
+- 存储：主进程 userData/memoryflow-data.json（原子写 tmp+rename），IPC：memoryflow:read/write/remove
+- preload contextBridge 暴露 window.memoryflowDesktop，useStore 自动检测环境切换适配器（Electron→文件 / 浏览器→localStorage）
+- 数据不随浏览器缓存清理丢失，这是桌面端比 web 更稳的点
+
+## 命令
+- npm run start --workspace @memoryflow/desktop   # 构建并启动生产窗口
+- npm run dev --workspace @memoryflow/desktop     # vite dev(5176) + Electron 热载
+- npm run package --workspace @memoryflow/desktop # electron-builder 出 nsis 安装包
+
+## 验证
+- 生产模式启动 ✅ IPC 写读回环 SMOKE_TEST PASS ✅ 数据文件落盘 ✅
+- 内置冒烟探针：每次启动 did-finish-load 自动验证 preload→IPC→文件链路（stdout 输出 SMOKE_TEST: PASS/FAIL）
