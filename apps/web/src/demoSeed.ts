@@ -8,57 +8,9 @@
 import type { Card, ReviewLog, ReviewRating } from '@memoryflow/core'
 import { sm2Update } from '@memoryflow/core'
 import { useStore } from './stores/useStore'
+import { MATERIALS, CARD_TYPES } from './demoMaterials'
 
 const DEMO_KEY = 'demo-seeded-v1'
-
-const MATERIALS = [
-  {
-    title: '马原 · 唯物辩证法',
-    text: `唯物辩证法
-
-唯物辩证法是关于自然、社会和思维发展一般规律的科学，它包括联系与发展的两大总特征。
-
-矛盾规律
-
-矛盾是事物发展的根本动力。矛盾的同一性是指矛盾双方相互依存、相互贯通的性质和趋势。矛盾的斗争性是指矛盾双方相互排斥、相互分离的性质和趋势。同一性与斗争性相互联结，共同推动事物运动变化。
-
-量变与质变
-
-量变是事物数量的增减和场所的变更，质变是事物性质的根本变化。量变是质变的必要准备，质变是量变的必然结果。质量互变规律揭示了事物发展的形式和状态。
-
-否定之否定
-
-事物发展是螺旋式上升、波浪式前进的过程。辩证的否定是包含肯定的否定，是既克服又保留，即"扬弃"。`,
-  },
-  {
-    title: '马原 · 认识论',
-    text: `实践与认识
-
-实践是认识的基础，实践是认识的来源、动力、目的和检验标准。认识过程包括感性认识和理性认识两个阶段。感性认识是认识的初级阶段，理性认识是认识的高级阶段，二者相互渗透。
-
-真理
-
-真理是标志主观与客观相符合的哲学范畴，是对客观事物及其规律的正确反映。真理具有客观性、绝对性和相对性。实践是检验真理的唯一标准。
-
-认识过程的反复性
-
-认识的发展是从实践到认识、从认识到实践的螺旋式循环。认识受主客观条件限制，需要经过多次反复才能完成。`,
-  },
-  {
-    title: '毛中特 · 新民主主义革命',
-    text: `总路线
-
-新民主主义革命的总路线是：无产阶级领导的，人民大众的，反对帝国主义、封建主义和官僚资本主义的革命。
-
-三大法宝
-
-统一战线、武装斗争、党的建设是新民主主义革命的三大法宝。统一战线是团结一切可能的革命力量，武装斗争是中国革命的主要形式，党的建设是革命胜利的根本保证。
-
-革命性质
-
-新民主主义革命属于资产阶级民主革命范畴，但领导权掌握在无产阶级手中，前途是社会主义而非资本主义。`,
-  },
-]
 
 /** 14 天模拟复习日志：有起伏、近 5 天连续（撑起 streak），今天留几条 */
 function buildFakeLogs(cards: Card[]): ReviewLog[] {
@@ -168,9 +120,9 @@ export function seedDemoDataIfFirstRun(): void {
       allBlockIds.push(...blocks.map(b => b.id))
     }
 
-    // 2. 出卡
+    // 2. 出卡（标注 + 规则类型全覆盖）
     const state1 = useStore.getState()
-    const newCards = state1.generateFromBlocks(allBlockIds, ['qa', 'cloze', 'essay'])
+    const newCards = state1.generateFromBlocks(allBlockIds, [...CARD_TYPES])
 
     // 3. 生成 14 天历史日志并回放到卡片 SM-2 状态
     const logs = buildFakeLogs(newCards)
