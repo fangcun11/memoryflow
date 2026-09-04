@@ -2,8 +2,8 @@
 // 文本导入 & 知识分块（纯函数，零 DOM 依赖）
 // ============================================================
 
-import { createId } from './id'
-import type { Document, KnowledgeBlock } from './types'
+import { createId } from './id.ts'
+import type { Document, KnowledgeBlock } from './types.ts'
 
 /** 支持的预设标签 */
 export const PRESET_TAGS = [

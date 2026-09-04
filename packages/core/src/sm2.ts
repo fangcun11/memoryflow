@@ -2,7 +2,7 @@
 // SM-2 间隔重复算法（纯函数，零依赖）
 // ============================================================
 
-import type { Card, ReviewRating } from './types'
+import type { Card, ReviewRating } from './types.ts'
 
 /**
  * SM-2 算法：根据用户评分更新卡片调度参数

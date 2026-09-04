@@ -16,19 +16,19 @@ export type {
   PersistedData,
   AppState,
   StorageAdapter,
-} from './types'
+} from './types.ts'
 
 // ID
-export { createId, setIdGenerator } from './id'
+export { createId, setIdGenerator } from './id.ts'
 
 // SM-2 算法
-export { sm2Update, predictInterval, formatInterval } from './sm2'
+export { sm2Update, predictInterval, formatInterval } from './sm2.ts'
 
 // 文本解析
-export { parseTextToBlocks, PRESET_TAGS } from './textParser'
+export { parseTextToBlocks, PRESET_TAGS } from './textParser.ts'
 
 // 卡片生成
-export { generateCards, generateCompareCard } from './cardGenerator'
+export { generateCards, generateCompareCard } from './cardGenerator.ts'
 
 // Store 工厂
 export {

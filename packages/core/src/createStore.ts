@@ -16,11 +16,11 @@ import type {
   LearningSettings,
   AppState,
   StorageAdapter,
-} from './types'
-import { createId } from './id'
-import { sm2Update } from './sm2'
-import { generateCards } from './cardGenerator'
-import { parseTextToBlocks, PRESET_TAGS } from './textParser'
+} from './types.ts'
+import { createId } from './id.ts'
+import { sm2Update } from './sm2.ts'
+import { generateCards } from './cardGenerator.ts'
+import { parseTextToBlocks, PRESET_TAGS } from './textParser.ts'
 
 export interface StoreActions {
   // === 文档 ===
