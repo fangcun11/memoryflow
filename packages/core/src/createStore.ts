@@ -30,6 +30,7 @@ export interface StoreActions {
   // === 知识块 ===
   updateBlockTags: (blockId: string, tags: string[]) => void
   updateBlockDifficulty: (blockId: string, difficulty: number) => void
+  updateBlockContent: (blockId: string, content: string, title?: string) => void
   setBlockRelated: (blockId: string, relatedIds: string[]) => void
   deleteBlock: (blockId: string) => void
   addBlock: (documentId: string, content: string, title?: string) => KnowledgeBlock
@@ -136,6 +137,24 @@ export function createMemoryFlowStore(
           set(state => ({
             blocks: state.blocks.map(b =>
               b.id === blockId ? { ...b, difficulty, updatedAt: Date.now() } : b
+            ),
+          }))
+        },
+
+        // 更新知识块内容；已从该块生成的卡片不会自动重写（卡片是导入时的快照），
+        // 由调用方决定是否重新出卡
+        updateBlockContent: (blockId, content, title) => {
+          set(state => ({
+            blocks: state.blocks.map(b =>
+              b.id === blockId
+                ? {
+                    ...b,
+                    content: content.trim(),
+                    // 未显式传 title 时保持原标题
+                    title: title !== undefined ? title.trim() || undefined : b.title,
+                    updatedAt: Date.now(),
+                  }
+                : b
             ),
           }))
         },
