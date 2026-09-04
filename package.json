@@ -1,0 +1,18 @@
+{
+  "name": "memoryflow-monorepo",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @memoryflow/web",
+    "build": "npm run build --workspace @memoryflow/web",
+    "lint": "npm run lint --workspace @memoryflow/web"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.2"
+  }
+}

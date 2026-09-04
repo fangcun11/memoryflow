@@ -1,0 +1,204 @@
+@import "tailwindcss";
+
+/*
+ * Claude Design System — 完整 token 映射
+ * 基于 Anthropic 官方 DESIGN.md 规范
+ *
+ * 核心理念：
+ * - 暖奶油画布 #faf9f5，从不用纯白
+ * - 赤陶色品牌色 #cc785c，克制使用在 CTA 上
+ * - 所有灰色带黄棕底色，绝无冷蓝灰
+ * - 衬线标题 + 无衬线 UI 文字
+ * - Ring shadow（0px 0px 0px 1px）代替可见边框
+ * - 暖色表面交替（cream → sand → charcoal → near-black）创造视觉节奏
+ */
+
+@theme {
+  /* ========== Surface 色彩系统 ========== */
+  --color-canvas: #faf9f5;
+  --color-surface-soft: #f5f0e8;
+  --color-surface-card: #efe9de;
+  --color-surface-strong: #e8e0d2;
+  --color-surface-dark: #181715;
+  --color-surface-dark-elevated: #252320;
+  --color-surface-dark-soft: #1f1e1b;
+
+  /* ========== 品牌色 & 强调色 ========== */
+  --color-coral: #cc785c;
+  --color-coral-active: #a9583e;
+  --color-coral-disabled: #e6dfd8;
+  --color-coral-light: #cc785c20;
+  --color-teal: #5db8a6;
+  --color-teal-light: #5db8a620;
+  --color-amber: #e8a55a;
+  --color-amber-light: #e8a55a20;
+  --color-success: #5db872;
+  --color-success-light: #5db87220;
+  --color-warning: #d4a017;
+  --color-error: #c64545;
+  --color-error-light: #c6454520;
+
+  /* ========== 文字色 ========== */
+  --color-ink: #141413;
+  --color-body: #3d3d3a;
+  --color-body-strong: #252523;
+  --color-muted: #6c6a64;
+  --color-muted-soft: #8e8b82;
+  --color-on-primary: #ffffff;
+  --color-on-dark: #faf9f5;
+  --color-on-dark-soft: #a09d96;
+
+  /* ========== 边框 ========== */
+  --color-hairline: #e6dfd8;
+  --color-hairline-soft: #ebe6df;
+
+  /* ========== 字体 ========== */
+  --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+
+  /* ========== 圆角 ========== */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+
+  /* ========== 间距 ==========
+   * ⚠️ 不要定义 --spacing-sm/md/lg/xl/2xl 等命名 token！
+   * 它们与 Tailwind v4 的 sizing scale (max-w-sm, w-md 等) 共用命名空间，
+   * 会导致 max-w-sm=8px 而非 24rem，布局全面崩溃。
+   * 数值间距（p-4, m-2, gap-3）通过 base --spacing 乘数正常工作。 */
+
+  /* ========== 阴影 ========== */
+  --shadow-sm: 0 1px 2px #14141308;
+  --shadow-md: 0 2px 8px #14141312;
+  --shadow-lg: 0 8px 24px #14141314;
+  --shadow-ring: 0 0 0 1px #e6dfd8;
+  --shadow-ring-hover: 0 0 0 1px #cc785c40;
+  --shadow-ring-focus: 0 0 0 2px #cc785c60;
+
+  /* ========== 动画 ========== */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ========== 向后兼容的旧 token 名 ========== */
+  --color-cream-50: #faf9f5;
+  --color-cream-100: #f5f0e8;
+  --color-cream-200: #efe9de;
+  --color-cream-300: #e6dfd8;
+  --color-cream-400: #e8e0d2;
+  --color-coral-400: #cc785c;
+  --color-coral-500: #cc785c;
+  --color-coral-600: #a9583e;
+  --color-coral-700: #8e4a33;
+  --color-warm-50: #faf9f5;
+  --color-warm-100: #f5f0e8;
+  --color-warm-200: #efe9de;
+  --color-warm-300: #e8e0d2;
+  --color-warm-400: #d6ceb8;
+  --color-sage-400: #5db8a6;
+  --color-sage-500: #4da394;
+  --color-sage-600: #3d8e80;
+  --color-slate-400: #8e8b82;
+  --color-slate-500: #6c6a64;
+  --color-slate-600: #4d4c48;
+  --color-slate-700: #3d3d3a;
+  --color-slate-800: #252523;
+  --color-slate-900: #141413;
+}
+
+/* ========== 全局基础 ========== */
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-canvas);
+  color: var(--color-body);
+  margin: 0;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ========== 滚动条 ========== */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--color-hairline);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-muted-soft);
+}
+
+/* ========== 选中文字 — 赤陶高亮 ========== */
+::selection {
+  background-color: #cc785c30;
+  color: var(--color-ink);
+}
+
+/* ========== 卡片翻转动画 ========== */
+.card-flip {
+  perspective: 1000px;
+}
+.card-flip-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.card-flip-inner.flipped {
+  transform: rotateY(180deg);
+}
+.card-front,
+.card-back {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+.card-back {
+  transform: rotateY(180deg);
+}
+
+/* ========== 热力图 ========== */
+.heatmap-cell {
+  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.15s;
+}
+.heatmap-cell:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+/* ========== 移动端 Bottom Sheet 入场 ========== */
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+.sheet-up {
+  animation: sheet-up 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}

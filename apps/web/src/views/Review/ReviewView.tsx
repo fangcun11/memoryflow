@@ -1,0 +1,382 @@
+import { useState, useEffect, useCallback, useRef } from 'react'
+import type { PointerEvent as ReactPointerEvent } from 'react'
+import { BrainCircuit, Check, ArrowLeftRight, X } from 'lucide-react'
+import { useStore } from '../../stores/useStore'
+import { predictInterval, formatInterval } from '@memoryflow/core'
+import type { ReviewRating, Card } from '@memoryflow/core'
+
+/** 上滑/下滑评分的触发阈值（px） */
+const SWIPE_THRESHOLD = 90
+
+export default function ReviewView() {
+  const {
+    cards,
+    reviewQueue,
+    currentReviewIndex,
+    reviewSession,
+    startReview,
+    rateCard,
+    nextCard,
+    endReview,
+    getDueCards,
+    getNewCards,
+    getHardCards,
+  } = useStore()
+
+  const [isFlipped, setIsFlipped] = useState(false)
+  const [showComplete, setShowComplete] = useState(false)
+  const [timer, setTimer] = useState(0)
+
+  const cardRef = useRef<HTMLDivElement>(null)
+  const swipeState = useRef({ startY: 0, dy: 0, active: false, moved: false })
+
+  const dueCards = getDueCards()
+  const newCards = getNewCards()
+  const hardCards = getHardCards()
+
+  useEffect(() => {
+    if (reviewQueue.length > 0 && currentReviewIndex < reviewQueue.length) {
+      const interval = setInterval(() => setTimer(t => t + 1), 1000)
+      return () => clearInterval(interval)
+    }
+  }, [reviewQueue.length, currentReviewIndex])
+
+  const currentCard: Card | undefined = reviewQueue[currentReviewIndex]
+  const isComplete = currentReviewIndex >= reviewQueue.length && reviewQueue.length > 0
+
+  useEffect(() => {
+    if (isComplete && !showComplete) {
+      setShowComplete(true)
+    }
+  }, [isComplete])
+
+  const handleFlip = useCallback(() => {
+    setIsFlipped(f => !f)
+  }, [])
+
+  const handleRate = useCallback(
+    (r: ReviewRating) => {
+      rateCard(r)
+      setTimeout(() => {
+        setIsFlipped(false)
+        nextCard()
+      }, 300)
+    },
+    [rateCard, nextCard]
+  )
+
+  // ===== 移动端手势评分：翻面后 上滑=简单、下滑=忘记 =====
+  const resetCardStyle = () => {
+    const el = cardRef.current
+    if (el) {
+      el.style.transition = ''
+      el.style.transform = ''
+      el.style.opacity = ''
+    }
+  }
+
+  const flyOut = (dir: number) => {
+    const el = cardRef.current
+    if (!el) return
+    el.style.transition = 'transform 0.3s ease, opacity 0.3s ease'
+    el.style.transform = `translateY(${dir * 480}px) rotate(${dir * 3}deg)`
+    el.style.opacity = '0'
+  }
+
+  const handlePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!isFlipped) return
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId)
+    } catch {
+      /* 指针捕获不可用时忽略，手势仍可在卡片区域内工作 */
+    }
+    swipeState.current = { startY: e.clientY, dy: 0, active: true, moved: false }
+  }
+
+  const handlePointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const s = swipeState.current
+    if (!s.active) return
+    s.dy = e.clientY - s.startY
+    if (Math.abs(s.dy) > 6) s.moved = true
+    const el = cardRef.current
+    if (el) {
+      el.style.transition = 'none'
+      el.style.transform = `translateY(${s.dy}px)`
+      el.style.opacity = String(Math.max(0.5, 1 - Math.abs(s.dy) / 500))
+    }
+  }
+
+  const handlePointerUp = () => {
+    const s = swipeState.current
+    if (!s.active) return
+    s.active = false
+    if (s.dy < -SWIPE_THRESHOLD) {
+      flyOut(-1)
+      handleRate(5)
+    } else if (s.dy > SWIPE_THRESHOLD) {
+      flyOut(1)
+      handleRate(0)
+    } else {
+      resetCardStyle()
+    }
+  }
+
+  const handlePointerCancel = () => {
+    swipeState.current.active = false
+    resetCardStyle()
+  }
+
+  const handleCardClick = () => {
+    // 拖拽过就不当作点按，避免评分后误翻转
+    if (swipeState.current.moved) {
+      swipeState.current.moved = false
+      return
+    }
+    handleFlip()
+  }
+
+  // 切换到下一张时清掉上一张的飞出样式
+  useEffect(() => {
+    resetCardStyle()
+  }, [currentReviewIndex])
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.code === 'Space') {
+        e.preventDefault()
+        handleFlip()
+      } else if (isFlipped) {
+        switch (e.key) {
+          case '1': handleRate(0); break
+          case '2': handleRate(2); break
+          case '3': handleRate(4); break
+          case '4': handleRate(5); break
+        }
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [isFlipped, handleFlip, handleRate])
+
+  // Start page
+  if (reviewQueue.length === 0 && !showComplete) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center p-6 lg:p-8">
+        <div className="text-center max-w-md">
+          <div className="w-20 h-20 rounded-2xl bg-coral-light flex items-center justify-center mx-auto mb-6">
+            <BrainCircuit className="w-10 h-10 text-coral" strokeWidth={1.5} />
+          </div>
+          <h2 className="font-serif text-[1.75rem] font-medium text-ink tracking-tight mb-2">开始今日复习</h2>
+
+          <div className="grid grid-cols-3 gap-3 my-6">
+            <StatCard label="待复习" value={dueCards.length} variant="coral" />
+            <StatCard label="新卡片" value={newCards.length} variant="teal" />
+            <StatCard label="难卡" value={hardCards.length} variant="amber" />
+          </div>
+
+          {cards.length === 0 ? (
+            <p className="text-sm text-muted mb-6">
+              还没有卡片，先去知识库导入材料并生成卡片吧
+            </p>
+          ) : dueCards.length + newCards.length === 0 ? (
+            <p className="text-sm text-muted mb-6">
+              今日复习已完成，太棒了！
+            </p>
+          ) : null}
+
+          <button
+            onClick={() => {
+              setShowComplete(false)
+              startReview()
+            }}
+            disabled={cards.length === 0}
+            className="px-8 py-3 bg-coral text-on-primary rounded-lg text-sm font-medium hover:bg-coral-active transition-colors shadow-sm disabled:opacity-40 active:scale-95"
+          >
+            开始复习
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Complete page
+  if (showComplete) {
+    const { reviewed, correct } = reviewSession
+    return (
+      <div className="h-full flex flex-col items-center justify-center p-6 lg:p-8">
+        <div className="text-center max-w-md">
+          <div className="w-20 h-20 rounded-2xl bg-success-light flex items-center justify-center mx-auto mb-6">
+            <Check className="w-10 h-10 text-success" strokeWidth={2} />
+          </div>
+          <h2 className="font-serif text-[1.75rem] font-medium text-ink tracking-tight mb-2">复习完成！</h2>
+          <p className="text-sm text-muted mb-6">坚持就是胜利，每天进步一点点</p>
+
+          <div className="grid grid-cols-3 gap-3 mb-8">
+            <StatCard label="已复习" value={reviewed} variant="coral" />
+            <StatCard label="正确率" value={reviewed > 0 ? Math.round((correct / reviewed) * 100) : 0} suffix="%" variant="teal" />
+            <StatCard label="用时" value={formatTime(timer)} isText variant="amber" />
+          </div>
+
+          <button
+            onClick={() => {
+              setShowComplete(false)
+              endReview()
+            }}
+            className="px-8 py-3 bg-coral text-on-primary rounded-lg text-sm font-medium hover:bg-coral-active transition-colors shadow-sm active:scale-95"
+          >
+            返回
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (!currentCard) return null
+
+  const progress = ((currentReviewIndex + 1) / reviewQueue.length) * 100
+
+  return (
+    <div className="h-full flex flex-col">
+      {/* Progress bar */}
+      <div className="px-4 lg:px-8 pt-4 lg:pt-6">
+        <div className="flex items-center justify-between text-xs text-muted mb-2">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => endReview()}
+              className="w-7 h-7 -ml-1.5 rounded-lg hover:bg-surface-soft flex items-center justify-center text-muted-soft hover:text-ink transition-colors"
+              title="结束本次复习"
+            >
+              <X className="w-4 h-4" strokeWidth={2} />
+            </button>
+            <span>{currentReviewIndex + 1} / {reviewQueue.length}</span>
+          </div>
+          <span>{formatTime(timer)}</span>
+        </div>
+        <div className="h-1.5 bg-surface-soft rounded-full overflow-hidden">
+          <div
+            className="h-full bg-coral rounded-full transition-all duration-300"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Card Area */}
+      <div className="flex-1 flex items-center justify-center p-4 lg:p-8 min-h-0">
+        <div
+          ref={cardRef}
+          className="card-flip w-full max-w-2xl h-80 cursor-pointer select-none"
+          style={{ touchAction: isFlipped ? 'none' : 'manipulation' }}
+          onClick={handleCardClick}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
+        >
+          <div className={`card-flip-inner ${isFlipped ? 'flipped' : ''}`}>
+            {/* Front — cream card with subtle shadow */}
+            <div className="card-front bg-canvas border border-hairline" style={{ boxShadow: 'var(--shadow-md)' }}>
+              <div className="absolute top-4 left-5">
+                <span
+                  className={`px-2.5 py-0.5 rounded-md text-xs font-medium ${
+                    currentCard.type === 'qa'
+                      ? 'bg-teal-light text-teal'
+                      : currentCard.type === 'cloze'
+                      ? 'bg-amber-light text-amber'
+                      : currentCard.type === 'essay'
+                      ? 'bg-success-light text-success'
+                      : 'bg-coral-light text-coral'
+                  }`}
+                >
+                  {currentCard.type === 'qa' ? '问答' : currentCard.type === 'cloze' ? '填空' : currentCard.type === 'essay' ? '论述' : '对比'}
+                </span>
+              </div>
+              <p className="text-lg text-ink font-medium leading-relaxed text-center whitespace-pre-wrap">
+                {currentCard.front}
+              </p>
+              <p className="absolute bottom-4 text-xs text-muted-soft flex items-center gap-1">
+                <ArrowLeftRight className="w-3.5 h-3.5" />
+                <span className="lg:hidden">点按翻转</span>
+                <span className="hidden lg:inline">点击翻转 · 空格键</span>
+              </p>
+            </div>
+
+            {/* Back — warm surface */}
+            <div className="card-back bg-surface-card border border-hairline" style={{ boxShadow: 'var(--shadow-md)' }}>
+              <p
+                className="text-sm text-body leading-relaxed text-left whitespace-pre-wrap overflow-auto max-h-full pb-6"
+                style={{ touchAction: 'pan-y' }}
+              >
+                {currentCard.back}
+              </p>
+              <div className="absolute bottom-3 inset-x-0 text-center text-xs text-muted-soft lg:hidden">
+                上滑 = 简单 · 下滑 = 忘记
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Rating Buttons */}
+      <div className="px-4 pb-[calc(1rem_+_env(safe-area-inset-bottom))] lg:px-8 lg:pb-8">
+        <div className="max-w-2xl mx-auto grid grid-cols-4 gap-2 lg:gap-3">
+          <RatingButton label="忘记" shortcut="1" interval={predictInterval(currentCard, 0)} variant="error" onClick={() => handleRate(0)} disabled={!isFlipped} />
+          <RatingButton label="模糊" shortcut="2" interval={predictInterval(currentCard, 2)} variant="amber" onClick={() => handleRate(2)} disabled={!isFlipped} />
+          <RatingButton label="记得" shortcut="3" interval={predictInterval(currentCard, 4)} variant="teal" onClick={() => handleRate(4)} disabled={!isFlipped} />
+          <RatingButton label="简单" shortcut="4" interval={predictInterval(currentCard, 5)} variant="success" onClick={() => handleRate(5)} disabled={!isFlipped} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function StatCard({ label, value, suffix = '', isText = false, variant }: {
+  label: string; value: number | string; suffix?: string; isText?: boolean;
+  variant: 'coral' | 'teal' | 'amber'
+}) {
+  const colorMap = {
+    coral: 'text-coral',
+    teal: 'text-teal',
+    amber: 'text-amber',
+  }
+  return (
+    <div className="bg-surface-card border border-hairline rounded-xl p-4 text-center">
+      <div className={`text-2xl font-bold ${colorMap[variant]}`}>
+        {isText ? value : `${value}${suffix}`}
+      </div>
+      <div className="text-xs text-muted mt-1">{label}</div>
+    </div>
+  )
+}
+
+function RatingButton({ label, shortcut, interval, variant, onClick, disabled }: {
+  label: string; shortcut: string; interval: number;
+  variant: 'error' | 'amber' | 'teal' | 'success'; onClick: () => void; disabled: boolean
+}) {
+  const variantStyles = {
+    error: 'border-error/30 hover:bg-error-light hover:border-error/50 text-error',
+    amber: 'border-amber/30 hover:bg-amber-light hover:border-amber/50 text-amber',
+    teal: 'border-teal/30 hover:bg-teal-light hover:border-teal/50 text-teal',
+    success: 'border-success/30 hover:bg-success-light hover:border-success/50 text-success',
+  }
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`py-3 px-4 rounded-xl border text-center transition-all duration-150 active:scale-95 disabled:opacity-25 disabled:cursor-not-allowed bg-canvas ${variantStyles[variant]}`}
+    >
+      <div className="text-sm font-medium">
+        {label}
+        <span className="ml-1.5 text-xs opacity-40 hidden lg:inline">[{shortcut}]</span>
+      </div>
+      <div className="text-xs opacity-60 mt-0.5">{formatInterval(interval)}</div>
+    </button>
+  )
+}
+
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return m > 0 ? `${m}:${s.toString().padStart(2, '0')}` : `${s}s`
+}
