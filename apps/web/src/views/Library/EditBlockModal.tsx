@@ -152,7 +152,7 @@ export default function EditBlockModal({ block, onClose }: Props) {
           </div>
           {linkedCardCount > 0 && contentChanged && (
             <p className="text-xs text-muted-soft shrink-0">
-              提示：该块已有 {linkedCardCount} 张卡片，修改内容后卡片不会自动更新，可重新生成该块卡片。
+              提示：该块已有 {linkedCardCount} 张卡片。修改内容后重新生成该块卡片即可更新卡面，已有复习进度会保留。
             </p>
           )}
         </div>

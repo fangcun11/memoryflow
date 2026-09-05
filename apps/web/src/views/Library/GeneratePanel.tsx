@@ -66,7 +66,7 @@ export default function GeneratePanel({ selectedCount, onGenerate, onClear }: Pr
             disabled={types.length === 0}
             className="flex-1 lg:flex-none px-5 py-2.5 bg-coral text-on-primary rounded-lg text-sm font-medium hover:bg-coral-active transition-colors shadow-sm disabled:opacity-40"
           >
-            生成卡片
+            预览生成
           </button>
         </div>
       </div>

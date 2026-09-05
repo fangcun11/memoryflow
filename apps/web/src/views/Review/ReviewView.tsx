@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import type { PointerEvent as ReactPointerEvent } from 'react'
-import { BrainCircuit, Check, ArrowLeftRight, X } from 'lucide-react'
+import type { PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from 'react'
+import { BrainCircuit, Check, ArrowLeftRight, X, RotateCcw, BookOpen } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { useStore } from '../../stores/useStore'
-import { predictInterval, formatInterval } from '@memoryflow/core'
+import { predictInterval, formatInterval, getShuffledOptions } from '@memoryflow/core'
 import type { ReviewRating, Card, CardType } from '@memoryflow/core'
 
 /** 上滑/下滑评分的触发阈值（px） */
@@ -27,8 +28,10 @@ export default function ReviewView() {
     reviewSession,
     startReview,
     rateCard,
+    undoLastReview,
     nextCard,
     endReview,
+    lastReviewSnapshot,
     getDueCards,
     getNewCards,
     getHardCards,
@@ -36,6 +39,7 @@ export default function ReviewView() {
 
   const [isFlipped, setIsFlipped] = useState(false)
   const [showComplete, setShowComplete] = useState(false)
+  const [showExitConfirm, setShowExitConfirm] = useState(false)
   const [timer, setTimer] = useState(0)
 
   // choice / judge 的作答状态（选完才显示评分按钮）
@@ -60,6 +64,25 @@ export default function ReviewView() {
   const isComplete = currentReviewIndex >= reviewQueue.length && reviewQueue.length > 0
   const complete = showComplete || isComplete
 
+  const isAnswerType = currentCard
+    ? currentCard.type === 'choice' || currentCard.type === 'judge'
+    : false
+  const answered = selectedIndex !== null
+  // 选择题展示顺序洗牌（按 card.id 确定性）：生成时正确项恒为 options[0]，不能直接渲染
+  const shuffled =
+    currentCard?.type === 'choice' && currentCard.options
+      ? getShuffledOptions(currentCard)
+      : null
+  // 作答对错：选择题按洗牌后的正确项判断；判断题按所选布尔值
+  const answeredCorrectly =
+    currentCard && answered
+      ? currentCard.type === 'choice'
+        ? selectedIndex === shuffled?.correctIndex
+        : (selectedIndex === 0) === currentCard.judgeAnswer
+      : false
+  // 作答型的建议评分：答对 → 记得，答错 → 忘记（空格/回车确认，可改选）
+  const suggestedRating = (answeredCorrectly ? 4 : 0) as ReviewRating
+
   const handleFlip = useCallback(() => {
     // choice/judge 用作答代替翻面
     if (currentCard?.type === 'choice' || currentCard?.type === 'judge') return
@@ -76,6 +99,24 @@ export default function ReviewView() {
       }, 300)
     },
     [rateCard, nextCard]
+  )
+
+  const handleUndo = useCallback(() => {
+    if (!lastReviewSnapshot) return
+    undoLastReview()
+    setIsFlipped(false)
+    setSelectedIndex(null)
+  }, [lastReviewSnapshot, undoLastReview])
+
+  // 查看来源块：跳到知识库并高亮该块（复习会话保留，返回后可继续）
+  const navigate = useNavigate()
+  const goSourceBlock = useCallback(
+    (e: ReactMouseEvent) => {
+      e.stopPropagation()
+      if (!currentCard) return
+      navigate(`/?block=${currentCard.blockId}`)
+    },
+    [currentCard, navigate]
   )
 
   // ===== 移动端手势评分：翻面后 上滑=简单、下滑=忘记 =====
@@ -156,9 +197,27 @@ export default function ReviewView() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      // 撤销上一张评分
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault()
+        handleUndo()
+        return
+      }
+      // 结束确认弹层：Esc 切换
+      if (e.key === 'Escape') {
+        if (reviewQueue.length > 0 && !showComplete) setShowExitConfirm(v => !v)
+        return
+      }
       if (e.code === 'Space') {
         e.preventDefault()
-        handleFlip()
+        // 作答型答完：空格按建议评分直接进入下一张
+        if (isAnswerType && answered) {
+          handleRate(suggestedRating)
+        } else {
+          handleFlip()
+        }
+      } else if (isAnswerType && answered && e.key === 'Enter') {
+        handleRate(suggestedRating)
       } else if (isFlipped) {
         switch (e.key) {
           case '1': handleRate(0); break
@@ -170,7 +229,7 @@ export default function ReviewView() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [isFlipped, handleFlip, handleRate])
+  }, [isFlipped, handleFlip, handleRate, handleUndo, isAnswerType, answered, suggestedRating, reviewQueue.length, showComplete])
 
   // Start page
   if (reviewQueue.length === 0 && !showComplete) {
@@ -248,8 +307,6 @@ export default function ReviewView() {
   if (!currentCard) return null
 
   const progress = ((currentReviewIndex + 1) / reviewQueue.length) * 100
-  const isAnswerType = currentCard.type === 'choice' || currentCard.type === 'judge'
-  const answered = selectedIndex !== null
 
   return (
     <div className="h-full flex flex-col">
@@ -258,15 +315,25 @@ export default function ReviewView() {
         <div className="flex items-center justify-between text-xs text-muted mb-2">
           <div className="flex items-center gap-2">
             <button
-              onClick={() => endReview()}
+              onClick={() => setShowExitConfirm(true)}
               className="w-7 h-7 -ml-1.5 rounded-lg hover:bg-surface-soft flex items-center justify-center text-muted-soft hover:text-ink transition-colors"
-              title="结束本次复习"
+              title="结束本次复习 (Esc)"
             >
               <X className="w-4 h-4" strokeWidth={2} />
             </button>
             <span>{currentReviewIndex + 1} / {reviewQueue.length}</span>
           </div>
-          <span>{formatTime(timer)}</span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleUndo}
+              disabled={!lastReviewSnapshot}
+              className="w-7 h-7 rounded-lg hover:bg-surface-soft flex items-center justify-center text-muted-soft hover:text-ink transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
+              title="撤销上一张评分 (Ctrl+Z)"
+            >
+              <RotateCcw className="w-4 h-4" strokeWidth={2} />
+            </button>
+            <span className="pl-1">{formatTime(timer)}</span>
+          </div>
         </div>
         <div className="h-1.5 bg-surface-soft rounded-full overflow-hidden">
           <div
@@ -280,14 +347,24 @@ export default function ReviewView() {
       <div className="flex-1 flex items-center justify-center p-4 lg:p-8 min-h-0">
         {isAnswerType ? (
           // ===== 作答型：选择 / 判断 —— 点击选项即反馈，无需翻面 =====
-          <div className="w-full max-w-2xl bg-surface-card border border-hairline rounded-2xl p-6 lg:p-8" style={{ boxShadow: 'var(--shadow-md)' }}>
+          <div key={currentReviewIndex} className="card-enter w-full max-w-2xl bg-surface-card border border-hairline rounded-2xl p-6 lg:p-8" style={{ boxShadow: 'var(--shadow-md)' }}>
             <div className="flex items-center justify-between mb-4">
               <span className={`px-2.5 py-0.5 rounded-md text-xs font-medium ${TYPE_BADGE[currentCard.type].classes}`}>
                 {TYPE_BADGE[currentCard.type].label}
               </span>
-              <span className="text-xs text-muted-soft">
-                {currentCard.type === 'choice' ? '点击选项作答' : '判断对错'}
-              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={goSourceBlock}
+                  className="inline-flex items-center gap-1 text-xs text-muted-soft hover:text-coral transition-colors"
+                  title="在知识库中查看并编辑来源块"
+                >
+                  <BookOpen className="w-3.5 h-3.5" strokeWidth={2} />
+                  查看来源块
+                </button>
+                <span className="text-xs text-muted-soft">
+                  {currentCard.type === 'choice' ? '点击选项作答' : '判断对错'}
+                </span>
+              </div>
             </div>
             <p className="text-lg text-ink font-medium leading-relaxed mb-5 whitespace-pre-wrap">
               {currentCard.type === 'judge' && currentCard.front.startsWith('判断：')
@@ -295,10 +372,10 @@ export default function ReviewView() {
                 : currentCard.front}
             </p>
 
-            {currentCard.type === 'choice' && currentCard.options && (
+            {currentCard.type === 'choice' && shuffled && (
               <div className="grid gap-2.5">
-                {currentCard.options.map((opt, i) => {
-                  const isCorrect = i === currentCard.answerIndex
+                {shuffled.options.map((opt, i) => {
+                  const isCorrect = i === shuffled.correctIndex
                   const isSelected = i === selectedIndex
                   let cls = 'border-hairline bg-canvas hover:border-coral/50 hover:bg-coral-faint'
                   if (answered) {
@@ -354,16 +431,21 @@ export default function ReviewView() {
             )}
 
             {answered && (
-              <div className={`mt-5 px-4 py-3 rounded-xl text-sm font-medium ${selectedIndex === 0 ? 'bg-success-light text-success' : 'bg-error-light text-error'}`}>
-                {selectedIndex === 0 ? `回答正确！${currentCard.type === 'choice' ? '这是易考点，注意关联记忆。' : ''}` : `回答错误。${currentCard.back}`}
+              <div className={`mt-5 px-4 py-3 rounded-xl text-sm font-medium ${answeredCorrectly ? 'bg-success-light text-success' : 'bg-error-light text-error'}`}>
+                {answeredCorrectly
+                  ? currentCard.type === 'choice'
+                    ? `回答正确！${currentCard.back}`
+                    : '回答正确！'
+                  : `回答错误。${currentCard.back}`}
               </div>
             )}
           </div>
         ) : (
           // ===== 翻面型：问答 / 填空 / 名解 / 论述 / 对比 =====
           <div
+            key={currentReviewIndex}
             ref={cardRef}
-            className="card-flip w-full max-w-2xl h-80 cursor-pointer select-none"
+            className="card-enter card-flip w-full max-w-2xl h-80 cursor-pointer select-none"
             style={{ touchAction: isFlipped ? 'none' : 'manipulation' }}
             onClick={handleCardClick}
             onPointerDown={handlePointerDown}
@@ -389,6 +471,14 @@ export default function ReviewView() {
               </div>
 
               <div className="card-back bg-surface-card border border-hairline" style={{ boxShadow: 'var(--shadow-md)' }}>
+                <button
+                  onClick={goSourceBlock}
+                  className="absolute top-4 right-5 z-10 inline-flex items-center gap-1 text-xs text-muted-soft hover:text-coral transition-colors"
+                  title="在知识库中查看并编辑来源块"
+                >
+                  <BookOpen className="w-3.5 h-3.5" strokeWidth={2} />
+                  查看来源块
+                </button>
                 <p
                   className="text-sm text-body leading-relaxed text-left whitespace-pre-wrap overflow-auto max-h-full pb-6 px-6"
                   style={{ touchAction: 'pan-y' }}
@@ -407,12 +497,40 @@ export default function ReviewView() {
       {/* Rating Buttons — 翻面型需翻面后启用；作答型选择后才启用 */}
       <div className="px-4 pb-[calc(1rem_+_env(safe-area-inset-bottom))] lg:px-8 lg:pb-8">
         <div className="max-w-2xl mx-auto grid grid-cols-4 gap-2 lg:gap-3">
-          <RatingButton label="忘记" shortcut="1" interval={predictInterval(currentCard, 0)} variant="error" onClick={() => handleRate(0)} disabled={isAnswerType ? !answered : !isFlipped} />
-          <RatingButton label="模糊" shortcut="2" interval={predictInterval(currentCard, 2)} variant="amber" onClick={() => handleRate(2)} disabled={isAnswerType ? !answered : !isFlipped} />
-          <RatingButton label="记得" shortcut="3" interval={predictInterval(currentCard, 4)} variant="teal" onClick={() => handleRate(4)} disabled={isAnswerType ? !answered : !isFlipped} />
-          <RatingButton label="简单" shortcut="4" interval={predictInterval(currentCard, 5)} variant="success" onClick={() => handleRate(5)} disabled={isAnswerType ? !answered : !isFlipped} />
+          <RatingButton label="忘记" shortcut="1" interval={predictInterval(currentCard, 0)} variant="error" onClick={() => handleRate(0)} disabled={isAnswerType ? !answered : !isFlipped} highlight={isAnswerType && answered && suggestedRating === 0} />
+          <RatingButton label="模糊" shortcut="2" interval={predictInterval(currentCard, 2)} variant="amber" onClick={() => handleRate(2)} disabled={isAnswerType ? !answered : !isFlipped} highlight={isAnswerType && answered && suggestedRating === 2} />
+          <RatingButton label="记得" shortcut="3" interval={predictInterval(currentCard, 4)} variant="teal" onClick={() => handleRate(4)} disabled={isAnswerType ? !answered : !isFlipped} highlight={isAnswerType && answered && suggestedRating === 4} />
+          <RatingButton label="简单" shortcut="4" interval={predictInterval(currentCard, 5)} variant="success" onClick={() => handleRate(5)} disabled={isAnswerType ? !answered : !isFlipped} highlight={isAnswerType && answered && suggestedRating === 5} />
         </div>
       </div>
+
+      {/* 退出确认弹层 */}
+      {showExitConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6" role="dialog" aria-modal="true" aria-label="确认结束复习">
+          <div className="absolute inset-0 bg-ink/30" onClick={() => setShowExitConfirm(false)} />
+          <div className="relative bg-surface-card border border-hairline rounded-2xl p-6 max-w-sm w-full text-center" style={{ boxShadow: 'var(--shadow-md)' }}>
+            <h3 className="font-serif text-lg font-medium text-ink mb-2">结束本次复习？</h3>
+            <p className="text-sm text-muted mb-5">已评分的卡片会保留记录，剩余未复习的卡片不会被计入今日进度。</p>
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                onClick={() => setShowExitConfirm(false)}
+                className="py-2.5 rounded-xl border border-coral/40 text-coral text-sm font-medium hover:bg-coral-faint transition-colors"
+              >
+                继续复习
+              </button>
+              <button
+                onClick={() => {
+                  setShowExitConfirm(false)
+                  endReview()
+                }}
+                className="py-2.5 rounded-xl bg-coral text-on-primary text-sm font-medium hover:bg-coral-active transition-colors"
+              >
+                结束复习
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -436,9 +554,10 @@ function StatCard({ label, value, suffix = '', isText = false, variant }: {
   )
 }
 
-function RatingButton({ label, shortcut, interval, variant, onClick, disabled }: {
+function RatingButton({ label, shortcut, interval, variant, onClick, disabled, highlight = false }: {
   label: string; shortcut: string; interval: number;
-  variant: 'error' | 'amber' | 'teal' | 'success'; onClick: () => void; disabled: boolean
+  variant: 'error' | 'amber' | 'teal' | 'success'; onClick: () => void; disabled: boolean;
+  highlight?: boolean // 作答型答完后的建议评分档（空格/回车直接确认这档）
 }) {
   const variantStyles = {
     error: 'border-error/30 hover:bg-error-light hover:border-error/50 text-error',
@@ -451,7 +570,7 @@ function RatingButton({ label, shortcut, interval, variant, onClick, disabled }:
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`py-3 px-4 rounded-xl border text-center transition-all duration-150 active:scale-95 disabled:opacity-25 disabled:cursor-not-allowed bg-canvas ${variantStyles[variant]}`}
+      className={`py-3 px-4 rounded-xl border text-center transition-all duration-150 active:scale-95 disabled:opacity-25 disabled:cursor-not-allowed bg-canvas ${variantStyles[variant]} ${highlight ? 'ring-2 ring-current/40 scale-[1.03]' : ''}`}
     >
       <div className="text-sm font-medium">
         {label}

@@ -9,6 +9,7 @@ export type {
   Tag,
   CardType,
   Card,
+  CardPreview,
   ReviewRating,
   ReviewLog,
   QueueType,
@@ -28,7 +29,12 @@ export { sm2Update, predictInterval, formatInterval } from './sm2.ts'
 export { parseTextToBlocks, PRESET_TAGS } from './textParser.ts'
 
 // 卡片生成
-export { generateCards, generateCompareCard } from './cardGenerator.ts'
+export {
+  generateCards,
+  generateCompareCard,
+  getShuffledOptions,
+  previewCards,
+} from './cardGenerator.ts'
 
 // Store 工厂
 export {
@@ -37,3 +43,13 @@ export {
   type MemoryFlowStore,
   type StoreActions,
 } from './createStore'
+
+// 看板统计
+export {
+  getDashboardStats,
+  cardTier,
+  calculateStreakFromLogs,
+  TIER_LABELS,
+  TIER_ORDER,
+} from './stats.ts'
+export type { CardTier, DashboardStats } from './stats.ts'

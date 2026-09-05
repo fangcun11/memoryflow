@@ -1,23 +1,36 @@
-import { useState } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Search, Plus, Layers, CreditCard } from 'lucide-react'
 import { useStore } from '../../stores/useStore'
-import BlockList from './BlockList'
+import { previewCards, cardTier } from '@memoryflow/core'
+import type { CardPreview, CardTier } from '@memoryflow/core'
+import BlockList, { type BlockHardStat } from './BlockList'
 import CardList from './CardList'
 import ImportModal from './ImportModal'
 import GeneratePanel from './GeneratePanel'
+import GeneratePreviewModal from './GeneratePreviewModal'
 import { toast } from '../../components/toast'
 
 /** 视图模式：知识块 / 卡片 */
 type ViewMode = 'blocks' | 'cards'
 
 export default function LibraryView() {
-  const { documents, blocks, tags } = useStore()
+  const { documents, blocks, tags, settings } = useStore()
   const cards = useStore(s => s.cards)
+  const [searchParams] = useSearchParams()
+  // 从复习页"查看来源块"跳转而来（/#/?block=<id>）
+  const highlightBlockId = searchParams.get('block')
   const [showImport, setShowImport] = useState(false)
   const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([])
+  const [pendingPreviews, setPendingPreviews] = useState<CardPreview[] | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterTag, setFilterTag] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('blocks')
+  // 看板记忆分层跳转：/?tier=hard 等，自动切到卡片视图并筛选
+  const tierParam = searchParams.get('tier') as CardTier | null
+  useEffect(() => {
+    if (tierParam) setViewMode('cards')
+  }, [tierParam])
 
   const matchBlock = (search: string, tag: string | null) => (block: (typeof blocks)[number]) => {
     const matchSearch =
@@ -28,14 +41,31 @@ export default function LibraryView() {
     return matchSearch && matchTag
   }
 
-  // 卡片视图：按所属块的标题/内容 + 标签筛选（复用同一搜索与标签筛选）
+  // 卡片视图：按所属块的标题/内容 + 标签筛选（复用同一搜索与标签筛选）；
+  // 带 ?tier= 参数时按记忆分层筛选
   const filteredCards = cards.filter(card => {
+    if (tierParam && cardTier(card, settings) !== tierParam) return false
     const block = blocks.find(b => b.id === card.blockId)
     if (!block) return false
     return matchBlock(searchQuery, filterTag)(block)
   })
 
-  const filteredBlocks = blocks.filter(matchBlock(searchQuery, filterTag))
+  const filteredBlocks = blocks.filter(
+    b => matchBlock(searchQuery, filterTag)(b) || b.id === highlightBlockId
+  )
+
+  // 块级难卡聚合：该块卡片中多次忘记/容易度低的数量（复习表现回流）
+  const hardStats = useMemo(() => {
+    const m: Record<string, BlockHardStat> = {}
+    for (const c of cards) {
+      const e = m[c.blockId] ?? (m[c.blockId] = { hard: 0, total: 0 })
+      e.total++
+      if (c.lapses >= settings.hardThreshold || c.easeFactor < settings.easeThreshold) {
+        e.hard++
+      }
+    }
+    return m
+  }, [cards, settings.hardThreshold, settings.easeThreshold])
 
   return (
     <div className="h-full flex flex-col">
@@ -133,6 +163,8 @@ export default function LibraryView() {
             <BlockList
               blocks={filteredBlocks}
               selectedIds={selectedBlockIds}
+              hardStats={hardStats}
+              highlightId={highlightBlockId}
               onToggleSelect={id =>
                 setSelectedBlockIds(prev =>
                   prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
@@ -150,15 +182,36 @@ export default function LibraryView() {
         <GeneratePanel
           selectedCount={selectedBlockIds.length}
           onGenerate={types => {
-            const newCards = useStore.getState().generateFromBlocks(selectedBlockIds, types)
-            setSelectedBlockIds([])
-            if (newCards.length > 0) {
-              toast(`已生成 ${newCards.length} 张卡片，可在「卡片」视图查看`)
-            } else {
+            const targetBlocks = blocks.filter(b => selectedBlockIds.includes(b.id))
+            const previews = previewCards(targetBlocks, types)
+            if (previews.length === 0) {
               toast('所选知识块没有可生成的内容，请检查标注或类型', 'error')
+              return
             }
+            setPendingPreviews(previews)
           }}
           onClear={() => setSelectedBlockIds([])}
+        />
+      )}
+
+      {/* Generate Preview Modal */}
+      {pendingPreviews && (
+        <GeneratePreviewModal
+          previews={pendingPreviews}
+          blockTitles={Object.fromEntries(blocks.map(b => [b.id, b.title || b.content.slice(0, 15)]))}
+          onCancel={() => setPendingPreviews(null)}
+          onConfirm={selected => {
+            const { added, updated } = useStore.getState().generateFromPreviews(selected)
+            setPendingPreviews(null)
+            setSelectedBlockIds([])
+            if (added === 0 && updated === 0) {
+              toast('没有生成新卡片', 'error')
+            } else if (updated > 0) {
+              toast(`新增 ${added} 张卡片，更新 ${updated} 张已有卡片（复习进度保留）`)
+            } else {
+              toast(`已生成 ${added} 张卡片，可在「卡片」视图查看`)
+            }
+          }}
         />
       )}
 

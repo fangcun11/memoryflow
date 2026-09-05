@@ -53,6 +53,9 @@ export interface Card {
   type: CardType
   front: string
   back: string
+  // 稳定身份：blockId + 标注签名（如 "recall@12" / "choice@30" / "rule:qa"）。
+  // 同身份重新生成时更新卡面并保留 SM-2 调度状态，而不是产生重复卡。
+  identity?: string
   // SM-2 调度字段
   easeFactor: number
   interval: number
@@ -66,8 +69,26 @@ export interface Card {
   judgeAnswer?: boolean
 }
 
+/** 卡片生成预览项：质量分级供确认层默认勾选 */
+export interface CardPreview {
+  card: Card
+  /** annotated=由标注生成；ok=规则生成且句式匹配；low=规则兜底，建议人工确认 */
+  quality: 'annotated' | 'ok' | 'low'
+  note?: string // low 时给用户的原因说明
+}
+
 /** 复习评分 */
 export type ReviewRating = 0 | 2 | 4 | 5
+
+/** 一次评分前的快照（供撤销使用，运行时状态不持久化） */
+export interface ReviewSnapshot {
+  card: Card // 评分前的卡片状态
+  index: number // 评分时的队列位置
+  logId: number // 本次写入的日志 id
+  reviewed: number
+  correct: number
+  requeued: boolean // 本次评分是否触发了重排（rating 0）
+}
 
 /** 复习日志 */
 export interface ReviewLog {
@@ -104,6 +125,7 @@ export interface AppState extends PersistedData {
   // 当前复习队列（运行时状态，不持久化）
   reviewQueue: Card[]
   currentReviewIndex: number
+  lastReviewSnapshot: ReviewSnapshot | null
   reviewSession: {
     started: number
     reviewed: number

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Pencil, Trash2, Check } from 'lucide-react'
 import { useStore } from '../../stores/useStore'
 import type { KnowledgeBlock } from '@memoryflow/core'
@@ -7,13 +7,21 @@ import EditBlockModal from './EditBlockModal'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import { toast } from '../../components/toast'
 
+/** 块级难卡聚合统计（复习表现回流知识库） */
+export interface BlockHardStat {
+  hard: number
+  total: number
+}
+
 interface Props {
   blocks: KnowledgeBlock[]
   selectedIds: string[]
   onToggleSelect: (id: string) => void
+  hardStats?: Record<string, BlockHardStat>
+  highlightId?: string | null // 从复习页"查看来源块"跳转而来
 }
 
-export default function BlockList({ blocks, selectedIds, onToggleSelect }: Props) {
+export default function BlockList({ blocks, selectedIds, onToggleSelect, hardStats, highlightId }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const deleteBlock = useStore(s => s.deleteBlock)
@@ -30,6 +38,8 @@ export default function BlockList({ blocks, selectedIds, onToggleSelect }: Props
           onToggleSelect={() => onToggleSelect(block.id)}
           onEdit={() => setEditingId(block.id)}
           onDelete={() => setDeletingId(block.id)}
+          hardStat={hardStats?.[block.id]}
+          highlighted={highlightId === block.id}
         />
       ))}
 
@@ -61,21 +71,35 @@ function BlockCard({
   onToggleSelect,
   onEdit,
   onDelete,
+  hardStat,
+  highlighted = false,
 }: {
   block: KnowledgeBlock
   selected: boolean
   onToggleSelect: () => void
   onEdit: () => void
   onDelete: () => void
+  hardStat?: BlockHardStat
+  highlighted?: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
   const [editingTags, setEditingTags] = useState(false)
   const tags = useStore(s => s.tags)
+  const cardRef = useRef<HTMLDivElement>(null)
+
+  // 从复习页跳转而来：滚动到可见并短暂高亮
+  useEffect(() => {
+    if (!highlighted) return
+    cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [highlighted])
 
   return (
     <div
+      ref={cardRef}
       className={`group rounded-xl transition-all duration-150 cursor-pointer ${
-        selected
+        highlighted
+          ? 'bg-surface-card shadow-md border border-coral ring-2 ring-coral/40'
+          : selected
           ? 'bg-surface-card shadow-md border border-coral/30'
           : 'bg-surface-card border border-hairline hover:border-muted-soft/40 hover:shadow-sm'
       }`}
@@ -84,9 +108,9 @@ function BlockCard({
       <div className="p-4 lg:p-5">
         {/* Header */}
         <div className="flex items-start justify-between gap-2 mb-2">
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 min-w-0">
             <div
-              className={`w-5 h-5 rounded flex items-center justify-center transition-all ${
+              className={`w-5 h-5 rounded flex items-center justify-center transition-all shrink-0 ${
                 selected
                   ? 'bg-coral text-on-primary'
                   : 'border border-hairline group-hover:border-muted-soft'
@@ -98,6 +122,14 @@ function BlockCard({
             </div>
             {block.title && (
               <h4 className="font-medium text-body-strong text-sm">{block.title}</h4>
+            )}
+            {hardStat && hardStat.hard > 0 && (
+              <span
+                className="shrink-0 px-2 py-0.5 rounded-md bg-amber-light text-amber text-[11px] font-medium"
+                title={`${hardStat.hard} 张难卡（多次忘记或容易度低），建议回来补充标注或拆分`}
+              >
+                难卡 {hardStat.hard}/{hardStat.total}
+              </span>
             )}
           </div>
           <div className="flex items-center gap-1 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity shrink-0">

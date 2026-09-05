@@ -23,7 +23,7 @@ export default function StatsScreen() {
   todayStart.setHours(0, 0, 0, 0)
 
   const todayLogs = reviewLogs.filter(l => l.reviewedAt >= todayStart.getTime())
-  const todayCorrect = todayLogs.filter(l => l.rating >= 3).length
+  const todayCorrect = todayLogs.filter(l => l.rating >= 2).length
 
   // 连续学习天数
   const streak = useMemo(() => {
