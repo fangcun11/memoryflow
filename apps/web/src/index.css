@@ -179,6 +179,14 @@ body {
 }
 .card-back {
   transform: rotateY(180deg);
+  /* 只让朝向用户的面参与命中测试：背面朝前时隐藏的背面元素（含"查看来源块"按钮）不可误点 */
+  pointer-events: none;
+}
+.card-flip-inner.flipped .card-back {
+  pointer-events: auto;
+}
+.card-flip-inner.flipped .card-front {
+  pointer-events: none;
 }
 /* 背面允许选中/复制答案文本（容器整体是 select-none） */
 .card-back {

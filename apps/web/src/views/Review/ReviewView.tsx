@@ -139,6 +139,9 @@ export default function ReviewView() {
 
   const handlePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (!isFlipped) return
+    // 点在按钮上（如"查看来源块"）时不启动手势，
+    // 否则 setPointerCapture 会把后续 click 重定向到卡片容器，按钮失效
+    if ((e.target as HTMLElement).closest('button')) return
     try {
       e.currentTarget.setPointerCapture(e.pointerId)
     } catch {
