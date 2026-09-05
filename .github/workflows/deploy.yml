@@ -25,9 +25,9 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
-      # npm#4828：Windows 上生成的 lockfile 在 Linux CI 缺 rolldown 原生绑定
-      - name: Install rolldown native binding for Linux
-        run: npm i @rolldown/binding-linux-x64-gnu --no-save
+      # npm#4828：Windows 上生成的 lockfile 在 Linux CI 缺原生可选依赖
+      - name: Install Linux native bindings
+        run: npm i @rolldown/binding-linux-x64-gnu lightningcss-linux-x64-gnu @tailwindcss/oxide-linux-x64-gnu --no-save
       - name: Build web app
         run: npm run build -w @memoryflow/web
       - name: Upload Pages artifact
