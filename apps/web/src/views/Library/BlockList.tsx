@@ -4,6 +4,7 @@ import { useStore } from '../../stores/useStore'
 import type { KnowledgeBlock } from '@memoryflow/core'
 import TagEditor from './TagEditor'
 import EditBlockModal from './EditBlockModal'
+import AnnotatedContent from './AnnotatedContent'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import { toast } from '../../components/toast'
 
@@ -156,19 +157,19 @@ function BlockCard({
           </div>
         </div>
 
-        {/* Content */}
-        <p
-          className={`text-sm text-body leading-relaxed whitespace-pre-wrap ${
-            expanded ? '' : 'line-clamp-3'
+        {/* Content — 渲染视图：高亮/批注/标注标签样式化，原文只在编辑弹层 */}
+        <div
+          className={`text-sm text-body leading-relaxed ${
+            expanded ? '' : 'line-clamp-6'
           }`}
           onClick={e => {
             e.stopPropagation()
             setExpanded(!expanded)
           }}
         >
-          {block.content}
-        </p>
-        {block.content.length > 150 && (
+          <AnnotatedContent content={block.content} annotations={block.annotations} />
+        </div>
+        {(block.content.length > 150 || block.annotations?.length) && (
           <button
             onClick={e => {
               e.stopPropagation()

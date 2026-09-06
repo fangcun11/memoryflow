@@ -34,16 +34,31 @@ export interface Tag {
 /** 卡片类型 */
 export type CardType = 'qa' | 'cloze' | 'compare' | 'essay' | 'recall' | 'choice' | 'judge'
 
-/** 知识块内标注（由标注语法解析而来：**名解** / {{填空}} / ?选择 / !判断） */
+/**
+ * 知识块内标注。两种书写入口产出同一种结构：
+ * - 标签语法（agent 创作主入口）：<recall> / <cloze> / <choice> / <judge> / <hl> / <note> / <idiom>…
+ * - 旧符号语法（兼容别名）：**名解** / {{填空}} / ?选择 / !判断
+ */
+export type BlockAnnotationType =
+  | 'recall' // 名解（出 recall 卡）
+  | 'cloze' // 填空（按 group 出卡）
+  | 'choice' // 选择（出 choice 卡）
+  | 'judge' // 判断（出 judge 卡）
+  | 'idiom' // 成语/易混词（出 recall 卡，payload 为对比项）
+  | 'highlight' // 高亮（纯视觉，不出卡）
+  | 'note' // 批注（不出卡，渲染为角标）
+
 export interface BlockAnnotation {
-  type: 'recall' | 'cloze' | 'choice' | 'judge'
+  type: BlockAnnotationType
   start: number // 相对块 content 的偏移
   end: number
-  groupId?: number // cloze 分组（{{c1::}} → 1）
-  stem?: string // choice 题干（| 前部分）
+  groupId?: number // cloze 分组（<cloze group="1"> / {{c1::}} → 1；未分组共享 0）
+  stem?: string // choice 题干
   answer?: string // choice 的正确项（options 中第一个）
   options?: string[] // choice 的全部选项（第一个为正确项）
   judgeTrue?: boolean // judge 的答案：陈述为真
+  payload?: string // 附加内容：批注正文 / hint / idiom 易混项 / choice 解析
+  display?: string // 高亮颜色名（amber/teal/blue/coral）
 }
 
 /** 卡片 */

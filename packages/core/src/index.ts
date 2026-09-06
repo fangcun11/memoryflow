@@ -17,6 +17,8 @@ export type {
   PersistedData,
   AppState,
   StorageAdapter,
+  BlockAnnotation,
+  BlockAnnotationType,
 } from './types.ts'
 
 // ID
@@ -26,7 +28,14 @@ export { createId, setIdGenerator } from './id.ts'
 export { sm2Update, predictInterval, formatInterval } from './sm2.ts'
 
 // 文本解析
-export { parseTextToBlocks, PRESET_TAGS } from './textParser.ts'
+export {
+  parseTextToBlocks,
+  scanAnnotations,
+  scanTagAnnotations,
+  scanLegacyAnnotations,
+  lintAnnotations,
+  PRESET_TAGS,
+} from './textParser.ts'
 
 // 卡片生成
 export {
@@ -34,6 +43,7 @@ export {
   generateCompareCard,
   getShuffledOptions,
   previewCards,
+  stripAnnotationTags,
 } from './cardGenerator.ts'
 
 // Store 工厂

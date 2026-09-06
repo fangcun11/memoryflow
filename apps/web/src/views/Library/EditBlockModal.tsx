@@ -1,19 +1,23 @@
 import { useState, useEffect, useRef } from 'react'
-import { X, Type, Hash, ListChecks, Scale } from 'lucide-react'
+import { X, Type, Hash, ListChecks, Scale, Highlighter, MessageSquareDot } from 'lucide-react'
 import { useStore } from '../../stores/useStore'
+import { lintAnnotations } from '@memoryflow/core'
 import type { KnowledgeBlock } from '@memoryflow/core'
+import AnnotatedContent from './AnnotatedContent'
 
 interface Props {
   block: KnowledgeBlock
   onClose: () => void
 }
 
-/** 标注工具按钮：选中文本后包语法；未选中则插入模板并聚焦光标 */
+/** 标注工具按钮：选中文本后包标签；未选中则插入模板并聚焦光标 */
 const ANNOTATION_TOOLS = [
-  { key: 'recall', label: '名解', symbol: '**', icon: Type, tip: '**关键词**' },
-  { key: 'cloze', label: '填空', symbol: '{{', icon: Hash, tip: '{{关键词}}' },
-  { key: 'choice', label: '选择', symbol: '?', icon: ListChecks, tip: '?题干|正确|干扰' },
-  { key: 'judge', label: '判断', symbol: '!', icon: Scale, tip: '!陈述 或 !~错误陈述' },
+  { key: 'recall', label: '名解', icon: Type, tip: '<recall>术语</recall>' },
+  { key: 'cloze', label: '填空', icon: Hash, tip: '<cloze>关键词</cloze>' },
+  { key: 'choice', label: '选择', icon: ListChecks, tip: '<choice stem="题干">…' },
+  { key: 'judge', label: '判断', icon: Scale, tip: '<judge value="false">陈述</judge>' },
+  { key: 'highlight', label: '高亮', icon: Highlighter, tip: '<hl color="amber">内容</hl>' },
+  { key: 'note', label: '批注', icon: MessageSquareDot, tip: '<note>批注正文</note>' },
 ]
 
 /**
@@ -30,6 +34,7 @@ export default function EditBlockModal({ block, onClose }: Props) {
   const linkedCardCount = cards.filter(c => c.blockId === block.id).length
   const contentChanged = content.trim() !== block.content
   const canSave = content.trim().length > 0
+  const lintWarnings = lintAnnotations(content)
 
   const handleSave = () => {
     if (!canSave) return
@@ -37,7 +42,7 @@ export default function EditBlockModal({ block, onClose }: Props) {
     onClose()
   }
 
-  /** 在光标/选区处插入标注语法 */
+  /** 在光标/选区处插入标注标签 */
   const applyAnnotation = (key: string) => {
     const el = textareaRef.current
     if (!el) return
@@ -50,21 +55,27 @@ export default function EditBlockModal({ block, onClose }: Props) {
     let inserted = ''
     switch (key) {
       case 'recall':
-        inserted = selected ? `**${selected}**` : `**待填名词**`
+        inserted = `<recall>${selected || '待填名词'}</recall>`
         break
       case 'cloze':
-        inserted = selected ? `{{${selected}}}` : `{{待填空词}}`
+        inserted = `<cloze>${selected || '待填空词'}</cloze>`
         break
       case 'choice': {
-        // 选项行需独占一行；若光标不在行首则补换行
         const prefix = before.endsWith('\n') || before === '' ? '' : '\n'
-        const tail = selected || '待填题干'
-        inserted = `${prefix}?${tail}|正确项|干扰项A|干扰项B`
+        inserted = `${prefix}<choice stem="${selected || '待填题干'}">\n<opt correct>正确项</opt>\n<opt>干扰项A</opt>\n<opt>干扰项B</opt>\n</choice>`
         break
       }
       case 'judge': {
         const prefix = before.endsWith('\n') || before === '' ? '' : '\n'
-        inserted = `${prefix}${selected ? (selected.startsWith('!') ? selected : `!${selected}`) : '!待填陈述（句末加 ~ 前缀如 !~ 表示错误陈述）'}`
+        inserted = `${prefix}<judge value="false">${selected || '待填陈述'}</judge>`
+        break
+      }
+      case 'highlight':
+        inserted = `<hl color="amber">${selected || '待高亮内容'}</hl>`
+        break
+      case 'note': {
+        const prefix = before.endsWith('\n') || before === '' ? '' : '\n'
+        inserted = `${prefix}<note>${selected || '批注正文'}</note>`
         break
       }
     }
@@ -139,7 +150,7 @@ export default function EditBlockModal({ block, onClose }: Props) {
                 </button>
               ))}
               <span className="text-[11px] text-muted-soft ml-auto hidden lg:inline">
-                语法：**名解** · {'{{'}填空{'}}'} · ?题干|正确|干扰 · !判断
+                标签语法：{'<recall>'}名解 · {'<cloze>'}填空 · {'<choice stem="题干">'} · {'<judge value="false">'} · {'<hl>'}高亮 · {'<note>'}批注
               </span>
             </div>
             <textarea
@@ -147,8 +158,23 @@ export default function EditBlockModal({ block, onClose }: Props) {
               value={content}
               onChange={e => setContent(e.target.value)}
               rows={Math.min(16, Math.max(6, Math.ceil(content.length / 40)))}
-              className="w-full flex-1 min-h-[180px] px-4 py-3 bg-surface-card border border-hairline rounded-lg text-sm text-ink resize-y focus:outline-none focus:border-coral focus:shadow-ring-focus transition-all leading-relaxed"
+              className="w-full flex-1 min-h-[180px] px-4 py-3 bg-surface-card border border-hairline rounded-lg text-sm text-ink resize-y focus:outline-none focus:border-coral focus:shadow-ring-focus transition-all leading-relaxed font-mono"
             />
+            {/* 标注体检：实时 lint 提示 */}
+            {lintWarnings.length > 0 && (
+              <div className="shrink-0 rounded-lg bg-amber-light border border-amber/30 px-3 py-2 space-y-0.5">
+                {lintWarnings.map((w, i) => (
+                  <p key={i} className="text-[11px] text-amber leading-relaxed">⚠ {w}</p>
+                ))}
+              </div>
+            )}
+            {/* 渲染预览 */}
+            <div className="shrink-0">
+              <p className="text-xs font-medium text-body-strong mb-1.5">渲染预览</p>
+              <div className="rounded-lg border border-hairline bg-surface-card px-4 py-3 max-h-40 overflow-auto">
+                <AnnotatedContent content={content} />
+              </div>
+            </div>
           </div>
           {linkedCardCount > 0 && contentChanged && (
             <p className="text-xs text-muted-soft shrink-0">

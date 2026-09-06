@@ -184,21 +184,25 @@ export function previewCards(
   for (const block of blocks) {
     const annos = block.annotations ?? []
 
-    // 1. 有标注且类型被勾选 → 按标注出卡
-    if (annos.length > 0 && ['recall', 'cloze', 'choice', 'judge'].some(t => types.includes(t as CardType))) {
-      let recallDone = false
-      let clozeDone = false
+    // 1. 有标注且类型被勾选 → 按标注出卡（highlight/note 为纯视觉标注，不出卡）
+    if (annos.length > 0 && ['recall', 'cloze', 'choice', 'judge', 'idiom'].some(t => types.includes(t as CardType))) {
       let annotatedAny = false
+      let clozeHandled = false
 
       for (const anno of annos) {
-        if (anno.type === 'recall' && !recallDone && types.includes('recall')) {
+        if (anno.type === 'recall' && types.includes('recall')) {
           previews.push({ card: generateRecallCard(block, anno), quality: 'annotated' })
-          recallDone = true
           annotatedAny = true
-        } else if (anno.type === 'cloze' && !clozeDone && types.includes('cloze')) {
-          previews.push({ card: generateAnnotatedClozeCard(block, annos), quality: 'annotated' })
-          clozeDone = true
+        } else if (anno.type === 'idiom' && types.includes('recall')) {
+          previews.push({ card: generateIdiomCard(block, anno), quality: 'annotated' })
           annotatedAny = true
+        } else if (anno.type === 'cloze' && types.includes('cloze') && !clozeHandled) {
+          // 按 group 分组出卡（Anki 惯例：每组一张，正面只挖本组的空）；全块一次
+          for (const card of generateAnnotatedClozeCards(block, annos)) {
+            previews.push({ card, quality: 'annotated' })
+            annotatedAny = true
+          }
+          clozeHandled = true
         } else if (anno.type === 'choice' && types.includes('choice')) {
           previews.push({ card: generateChoiceCard(block, anno), quality: 'annotated' })
           annotatedAny = true
@@ -267,64 +271,134 @@ export function generateCards(
   return previewCards(blocks, types).map(p => p.card)
 }
 
+// ============================================================
+// 标签文本工具（生成器共用）
+// ============================================================
+
+const INLINE_TAG_RE = /<(recall|cloze|hl|highlight|note|idiom)((?:\s+[\w-]+="[^"]*")*)?>([^<]*)<\/\1>/g
+
+/** 去掉全部标注标签，保留正文（含旧符号 **词** / {{词}}） */
+export function stripAnnotationTags(content: string): string {
+  return content
+    // choice/judge 块 → 保留题干内文本与选项行
+    .replace(/<choice(?:\s+[\w-]+="[^"]*")*>([\s\S]*?)<\/choice>/g, (_m, inner) =>
+      inner
+        .replace(/<opt\s+correct>([^<]*)<\/opt>/g, '\n- $1')
+        .replace(/<opt>([^<]*)<\/opt>/g, '\n- $1')
+        .replace(/<explain>([^<]*)<\/explain>/g, '\n$1')
+        .trim()
+    )
+    .replace(/<judge(?:\s+[\w-]+="[^"]*")*>([^<]*)<\/judge>/g, '$1')
+    .replace(INLINE_TAG_RE, '$3')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\{\{\s*(?:c\d+\s*::)?(.+?)\s*\}\}/g, '$1')
+}
+
 /**
- * 记忆卡（名解）：由 **术语** 标注生成
+ * cloze 变换：blankGroup 指定要挖空的组（null = 全部保留可见）。
+ * 兼容标签 <cloze> 与旧 {{cN::}} 两种写法；其他标注标签同步剥离。
+ */
+function transformCloze(content: string, blankGroup: number | null): string {
+  const stripped = content.replace(INLINE_TAG_RE, '$3')
+  return stripped
+    .replace(/<cloze((?:\s+[\w-]+="[^"]*")*)?>([^<]*)<\/cloze>/g, (_m, attrs, inner) => {
+      const g = attrs ? Number(parseTagGroup(attrs)) : 0
+      return blankGroup === null ? inner : g === blankGroup ? '____' : inner
+    })
+    .replace(/\{\{\s*(?:c(\d+)\s*::)?(.+?)\s*\}\}/g, (_m, cN, inner) => {
+      const g = cN ? Number(cN) : 0
+      return blankGroup === null ? inner : g === blankGroup ? '____' : inner
+    })
+}
+
+function parseTagGroup(attrText: string): string {
+  const m = attrText.match(/group\s*=\s*"([^"]*)"/)
+  return m?.[1] ?? '0'
+}
+
+/**
+ * 记忆卡（名解）：由 <recall> / **术语** 标注生成
  */
 function generateRecallCard(block: KnowledgeBlock, anno: BlockAnnotation): Card {
-  const match = block.content.slice(anno.start, anno.end).match(/\*\*(.+?)\*\*/)
+  const raw = block.content.slice(anno.start, anno.end)
+  const match = raw.match(/<recall[^>]*>([^<]*)<\/recall>/) ?? raw.match(/\*\*(.+?)\*\*/)
   const term = (match ? match[1] : block.title || block.content.slice(0, 20)).trim()
 
   return newCard(
     block,
     'recall',
     term,
-    // 隐藏标注符号，给出术语所在句作为定义
-    block.content.replace(/\*\*(.+?)\*\*/g, '$1').trim(),
+    // 隐藏标注符号，给出术语所在块作为定义
+    stripAnnotationTags(block.content).trim(),
     `recall@${anno.start}`
   )
 }
 
 /**
- * 填空题：按 {{关键词}} / {{c1::关键词}} 标注挖空，而非规则关键词
- * - 正面：原文挖空（词 → ____）
- * - 背面：完整原文（词可见）
+ * 成语/易混词卡：由 <idiom cmp="易混项">成语</idiom> 标注生成（recall 型）
  */
-function generateAnnotatedClozeCard(block: KnowledgeBlock, annos: BlockAnnotation[]): Card {
-  // 身份锚定在第一处 cloze 标注：标注位置移动后视为新卡，原地编辑则更新
-  const firstCloze = annos.find(a => a.type === 'cloze')
-  const signature = firstCloze ? `cloze@${firstCloze.start}` : 'cloze@rule'
-  const hide = block.content.replace(
-    /\{\{\s*(?:c\d+\s*::)?(.+?)\s*\}\}/g,
-    '____'
+function generateIdiomCard(block: KnowledgeBlock, anno: BlockAnnotation): Card {
+  const raw = block.content.slice(anno.start, anno.end)
+  const term = raw.match(/<idiom[^>]*>([^<]*)<\/idiom>/)?.[1]?.trim() ?? block.title ?? ''
+  const cmp = anno.payload ?? ''
+
+  return newCard(
+    block,
+    'recall',
+    `辨析：${term}`,
+    `${stripAnnotationTags(block.content).trim()}${cmp ? `\n\n易混对比：${cmp}` : ''}`,
+    `idiom@${anno.start}`
   )
-  const show = block.content.replace(
-    /\{\{\s*(?:c\d+\s*::)?(.+?)\s*\}\}/g,
-    '$1'
-  )
-  return newCard(block, 'cloze', `填空：${hide.trim()}`, show.trim(), signature)
 }
 
 /**
- * 选择题：由 ?题干|正确项|干扰A|干扰B 标注生成
+ * 填空题：按 <cloze group> / {{cN::}} 标注分组出卡（每组一张）
+ * - 正面：只挖本组的空（其他组明文可见）
+ * - 背面：完整原文
+ */
+function generateAnnotatedClozeCards(block: KnowledgeBlock, annos: BlockAnnotation[]): Card[] {
+  const groups = new Map<number, BlockAnnotation[]>()
+  for (const a of annos.filter(a => a.type === 'cloze')) {
+    const g = a.groupId ?? 0
+    const list = groups.get(g)
+    if (list) list.push(a)
+    else groups.set(g, [a])
+  }
+
+  const cards: Card[] = []
+  for (const [group, groupAnnos] of groups) {
+    const first = groupAnnos[0]
+    const hide = transformCloze(block.content, group)
+    const show = transformCloze(block.content, null)
+    cards.push(
+      newCard(block, 'cloze', `填空：${hide.trim()}`, show.trim(), `cloze@${first.start}@g${group}`)
+    )
+  }
+  return cards
+}
+
+/**
+ * 选择题：<choice stem="题干">（或旧 ?题干|正确|干扰）——正确项恒为 options[0]，
+ * 展示时经 getShuffledOptions 洗牌；payload 为解析。
  */
 function generateChoiceCard(block: KnowledgeBlock, anno: BlockAnnotation): Card {
   const stem = anno.stem ?? block.content.slice(anno.start, anno.end).split('|')[0].trim()
   const options = anno.options ?? []
+  const back = `正确答案：${anno.answer ?? ''}${anno.payload ? `\n解析：${anno.payload}` : ''}`
   return {
-    ...newCard(block, 'choice', `选择：${stem}`, `正确答案：${anno.answer ?? ''}`, `choice@${anno.start}`),
+    ...newCard(block, 'choice', `选择：${stem}`, back, `choice@${anno.start}`),
     options,
-    answerIndex: 0, // 标注语法中第一项为正确项（展示时经 getShuffledOptions 洗牌）
+    answerIndex: 0,
   }
 }
 
 /**
- * 判断题：由 !陈述 / !~陈述 标注生成
+ * 判断题：<judge value="true|false">陈述</judge>（或旧 !陈述 / !~陈述）
  */
 function generateJudgeCard(block: KnowledgeBlock, anno: BlockAnnotation): Card {
-  const stmt = block.content
-    .slice(anno.start, anno.end)
-    .replace(/^!\s*~?\s*/, '')
-    .trim()
+  const raw = block.content.slice(anno.start, anno.end)
+  const stmt = raw.match(/<judge[^>]*>([^<]*)<\/judge>/)?.[1]?.trim()
+    ?? raw.replace(/^!\s*~?\s*/, '').trim()
 
   return {
     ...newCard(block, 'judge', `判断：${stmt}`, anno.judgeTrue ? '正确' : '错误', `judge@${anno.start}`),
