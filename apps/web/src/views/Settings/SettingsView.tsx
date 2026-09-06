@@ -1,16 +1,64 @@
 import { useState } from 'react'
-import { Download, Upload, Trash2, X } from 'lucide-react'
+import { Download, Upload, Trash2, X, PackageOpen, Check, Loader2 } from 'lucide-react'
 import { useStore } from '../../stores/useStore'
+import { previewCards } from '@memoryflow/core'
+import { PRESET_PACKAGES, PRESET_CARD_TYPES } from '../../presetPackages'
+import type { PresetPackage } from '../../presetPackages'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import { toast } from '../../components/toast'
 
+const PRESET_FLAG_KEY = (id: string) => `memoryflow-preset-${id}`
+
 export default function SettingsView() {
-  const { settings, updateSettings, exportData, importData, clearAll } = useStore()
+  const { documents, settings, updateSettings, exportData, importData, clearAll } = useStore()
   const [showExport, setShowExport] = useState(false)
   const [exportText, setExportText] = useState('')
   const [importText, setImportText] = useState('')
   const [showImport, setShowImport] = useState(false)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
+  const [importingId, setImportingId] = useState<string | null>(null)
+  const [localFlags, setLocalFlags] = useState<Set<string>>(() => {
+    const s = new Set<string>()
+    try {
+      for (const pkg of PRESET_PACKAGES) {
+        if (localStorage.getItem(PRESET_FLAG_KEY(pkg.id))) s.add(pkg.id)
+      }
+    } catch { /* ignore */ }
+    return s
+  })
+
+  // 已导入判定：本地标记 或 文档里已有同名材料（防止重复导入）
+  const isImported = (pkg: PresetPackage) =>
+    localFlags.has(pkg.id) || pkg.materials.every(m => documents.some(d => d.title === m.title))
+
+  const handleImportPackage = (pkg: PresetPackage) => {
+    if (isImported(pkg)) return
+    setImportingId(pkg.id)
+    // 用微任务让按钮先进入 loading 态
+    setTimeout(() => {
+      try {
+        const store = useStore.getState()
+        const allBlockIds: string[] = []
+        for (const m of pkg.materials) {
+          const { blocks } = store.importText(m.title, m.text)
+          allBlockIds.push(...blocks.map(b => b.id))
+        }
+        // 质量过滤：与知识库预览确认同口径，低质量兜底卡不生成
+        const importedBlocks = useStore.getState().blocks.filter(b => allBlockIds.includes(b.id))
+        const previews = previewCards(importedBlocks, PRESET_CARD_TYPES)
+        const good = previews.filter(p => p.quality !== 'low')
+        const { added, updated } = store.generateFromPreviews(good)
+        try { localStorage.setItem(PRESET_FLAG_KEY(pkg.id), '1') } catch { /* ignore */ }
+        setLocalFlags(prev => new Set(prev).add(pkg.id))
+        toast(`已导入「${pkg.title}」：${pkg.materials.length} 篇材料 · ${added} 张新卡片${updated ? ` · 更新 ${updated} 张` : ''}`)
+      } catch (e) {
+        console.error('预置包导入失败:', e)
+        toast('导入失败，请重试', 'error')
+      } finally {
+        setImportingId(null)
+      }
+    }, 30)
+  }
 
   const handleExport = () => {
     setExportText(exportData())
@@ -74,6 +122,54 @@ export default function SettingsView() {
               className="w-24 px-3 py-2 bg-surface-soft border border-hairline rounded-lg text-sm text-ink text-center focus:outline-none focus:border-coral transition-all"
             />
           </SettingRow>
+        </div>
+      </section>
+
+      {/* 预置知识库 */}
+      <section className="bg-surface-card border border-hairline rounded-xl p-6 mb-6">
+        <h3 className="font-serif text-base font-medium text-ink mb-1">预置知识库</h3>
+        <p className="text-xs text-muted-soft mb-4">内置标注语料一键导入，导入时自动按标注出卡并过滤低质量兜底卡</p>
+        <div className="space-y-3">
+          {PRESET_PACKAGES.map(pkg => {
+            const imported = isImported(pkg)
+            const importing = importingId === pkg.id
+            return (
+              <div
+                key={pkg.id}
+                className={`flex items-center gap-4 px-4 py-3.5 rounded-lg border transition-colors ${
+                  imported ? 'bg-success-light/50 border-success/20' : 'bg-surface-soft border-hairline hover:border-coral/40'
+                }`}
+              >
+                <span className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${imported ? 'bg-success-light' : 'bg-coral-light'}`}>
+                  {imported
+                    ? <Check className="w-5 h-5 text-success" strokeWidth={2} />
+                    : <PackageOpen className="w-5 h-5 text-coral" strokeWidth={1.5} />}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-body-strong">{pkg.title}</div>
+                  <div className="text-xs text-muted mt-0.5 leading-relaxed">{pkg.desc}</div>
+                  <div className="text-[11px] text-muted-soft mt-0.5">{pkg.materials.length} 篇材料 · 标注语料</div>
+                </div>
+                <button
+                  onClick={() => handleImportPackage(pkg)}
+                  disabled={imported || importing}
+                  className={`shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition-all active:scale-95 ${
+                    imported
+                      ? 'bg-success-light text-success cursor-default'
+                      : 'bg-coral text-on-primary hover:bg-coral-active shadow-sm disabled:opacity-60'
+                  }`}
+                >
+                  {importing ? (
+                    <span className="inline-flex items-center gap-1.5"><Loader2 className="w-4 h-4 animate-spin" />导入中</span>
+                  ) : imported ? (
+                    '已导入'
+                  ) : (
+                    '导入'
+                  )}
+                </button>
+              </div>
+            )
+          })}
         </div>
       </section>
 
