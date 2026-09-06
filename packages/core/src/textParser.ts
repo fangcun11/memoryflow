@@ -143,6 +143,25 @@ function createBlock(
 
 const KNOWN_INLINE_TAGS = ['recall', 'cloze', 'hl', 'highlight', 'note', 'idiom'] as const
 
+const INLINE_TAG_RE = /<(recall|cloze|hl|highlight|note|idiom)((?:\s+[\w-]+="[^"]*")*)?>([^<]*)<\/\1>/g
+
+/** 去掉全部标注标签，保留正文（含旧符号 **词** / {{词}}）——渲染与标题提取共用 */
+export function stripAnnotationTags(content: string): string {
+  return content
+    // choice/judge 块 → 保留题干内文本与选项行
+    .replace(/<choice(?:\s+[\w-]+="[^"]*")*>([\s\S]*?)<\/choice>/g, (_m, inner) =>
+      inner
+        .replace(/<opt\s+correct>([^<]*)<\/opt>/g, '\n- $1')
+        .replace(/<opt>([^<]*)<\/opt>/g, '\n- $1')
+        .replace(/<explain>([^<]*)<\/explain>/g, '\n$1')
+        .trim()
+    )
+    .replace(/<judge(?:\s+[\w-]+="[^"]*")*>([^<]*)<\/judge>/g, '$1')
+    .replace(INLINE_TAG_RE, '$3')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\{\{\s*(?:c\d+\s*::)?(.+?)\s*\}\}/g, '$1')
+}
+
 function parseAttrs(attrText: string): Record<string, string> {
   const attrs: Record<string, string> = {}
   const re = /([a-zA-Z][\w-]*)\s*=\s*"([^"]*)"/g
@@ -345,18 +364,26 @@ export function lintAnnotations(content: string): string[] {
 }
 
 function extractTitle(content: string): string | undefined {
+  // 先剥掉标注标签/符号，标题不携带任何标注痕迹
+  const clean = stripAnnotationTags(content)
   // 尝试提取 # 标题
-  const headingMatch = content.match(/^#{1,4}\s+(.+)/m)
+  const headingMatch = clean.match(/^#{1,4}\s+(.+)/m)
   if (headingMatch) return headingMatch[1].trim()
 
+  // 独立的短行（材料惯用的"标题行 + 空行 + 正文"写法）优先作标题
+  const firstLine = clean.split('\n')[0]?.trim() ?? ''
+  if (firstLine && firstLine.length < 20 && !/[。！？，；]/.test(firstLine)) {
+    return firstLine
+  }
+
   // 尝试提取第一句话
-  const firstSentence = content.split(/[。！？]/)[0]
+  const firstSentence = clean.split(/[。！？]/)[0]
   if (firstSentence && firstSentence.length < 30) {
     return firstSentence.trim()
   }
 
   // 截取前20字
-  return content.slice(0, 20).trim()
+  return clean.slice(0, 20).trim()
 }
 
 function findCutPoint(text: string, maxLen: number): number {

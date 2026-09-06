@@ -34,6 +34,7 @@ export {
   scanTagAnnotations,
   scanLegacyAnnotations,
   lintAnnotations,
+  stripAnnotationTags,
   PRESET_TAGS,
 } from './textParser.ts'
 
@@ -43,7 +44,6 @@ export {
   generateCompareCard,
   getShuffledOptions,
   previewCards,
-  stripAnnotationTags,
 } from './cardGenerator.ts'
 
 // Store 工厂

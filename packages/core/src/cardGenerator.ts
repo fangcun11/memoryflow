@@ -6,6 +6,7 @@
 
 import { createId } from './id.ts'
 import type { BlockAnnotation, KnowledgeBlock, Card, CardType, CardPreview } from './types.ts'
+import { stripAnnotationTags } from './textParser.ts'
 
 // 政治理论常见关键词模式
 const DEFINITION_PATTERNS = [
@@ -272,27 +273,10 @@ export function generateCards(
 }
 
 // ============================================================
-// 标签文本工具（生成器共用）
+// 标签文本工具（生成器共用）：stripAnnotationTags 移至 textParser.ts（与标题提取共用）
 // ============================================================
 
 const INLINE_TAG_RE = /<(recall|cloze|hl|highlight|note|idiom)((?:\s+[\w-]+="[^"]*")*)?>([^<]*)<\/\1>/g
-
-/** 去掉全部标注标签，保留正文（含旧符号 **词** / {{词}}） */
-export function stripAnnotationTags(content: string): string {
-  return content
-    // choice/judge 块 → 保留题干内文本与选项行
-    .replace(/<choice(?:\s+[\w-]+="[^"]*")*>([\s\S]*?)<\/choice>/g, (_m, inner) =>
-      inner
-        .replace(/<opt\s+correct>([^<]*)<\/opt>/g, '\n- $1')
-        .replace(/<opt>([^<]*)<\/opt>/g, '\n- $1')
-        .replace(/<explain>([^<]*)<\/explain>/g, '\n$1')
-        .trim()
-    )
-    .replace(/<judge(?:\s+[\w-]+="[^"]*")*>([^<]*)<\/judge>/g, '$1')
-    .replace(INLINE_TAG_RE, '$3')
-    .replace(/\*\*(.+?)\*\*/g, '$1')
-    .replace(/\{\{\s*(?:c\d+\s*::)?(.+?)\s*\}\}/g, '$1')
-}
 
 /**
  * cloze 变换：blankGroup 指定要挖空的组（null = 全部保留可见）。

@@ -85,12 +85,14 @@ export default function AnnotatedContent({
         </div>
       )
     } else if (anno.type === 'judge') {
+      // 兼容标签壳（<judge>…</judge>）与旧符号前缀（! / !~）
+      const inner = raw.replace(/<\/?judge[^>]*>/g, '').replace(/^!\s*~?\s*/, '')
       nodes.push(
         <div key={key++} className="my-2 text-sm text-body">
           <span className={`mr-2 px-1.5 py-0.5 rounded text-[11px] font-medium ${anno.judgeTrue ? 'bg-success-light text-success' : 'bg-error-light text-error'}`}>
             {anno.judgeTrue ? '√ 真' : '× 假'}
           </span>
-          {raw.replace(/<\/?judge[^>]*>/g, '')}
+          {inner}
         </div>
       )
     } else if (anno.type === 'note') {
@@ -106,8 +108,12 @@ export default function AnnotatedContent({
         </span>
       )
     } else {
-      // recall / cloze / idiom / highlight：剥掉标签壳，渲染内文
-      const inner = raw.replace(/^<[^>]*>/, '').replace(/<\/[^>]*>$/, '')
+      // recall / cloze / idiom / highlight：剥壳取内文（标签壳 + 旧符号壳都剥）
+      const inner = raw
+        .replace(/^<[^>]*>/, '')
+        .replace(/<\/[^>]*>$/, '')
+        .replace(/^\*\*(.+)\*\*$/, '$1')
+        .replace(/^\{\{(?:c\d+::)?(.+)\}\}$/, '$1')
       const title = inlineTitle(anno)
       nodes.push(
         <span key={key++} className={inlineClass(anno.type, anno.display)} title={title}>

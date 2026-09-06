@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Pencil, Trash2, Check } from 'lucide-react'
 import { useStore } from '../../stores/useStore'
+import { stripAnnotationTags } from '@memoryflow/core'
 import type { KnowledgeBlock } from '@memoryflow/core'
 import TagEditor from './TagEditor'
 import EditBlockModal from './EditBlockModal'
@@ -122,7 +123,10 @@ function BlockCard({
               )}
             </div>
             {block.title && (
-              <h4 className="font-medium text-body-strong text-sm">{block.title}</h4>
+              <h4 className="font-medium text-body-strong text-sm">
+                {/* 存量数据标题可能携带标注痕迹，显示时剥离 */}
+                {stripAnnotationTags(block.title).slice(0, 30)}
+              </h4>
             )}
             {hardStat && hardStat.hard > 0 && (
               <span
